@@ -10,18 +10,19 @@ class UserProfile(BaseModel):
 
     nationality: str | None = None
     current_country: str | None = None
-    intended_canton: str | None = None
-    canton_of_residence: str | None = None
-    swiss_residence_start_date: str | None = None
+    age: int | None = None
+    education: str | None = None
     profession: str | None = None
     employment_status: str | None = None
+    intended_canton: str | None = None
+    intended_city: str | None = None
+    purpose_of_stay: str | None = None
     marital_status: str | None = None
-    education: str | None = None
     children: str | None = None
     criminal_record: str | None = None
-    residence_permit: str | None = None
-    driving_licence_country: str | None = None
-    sponsor_nationality: str | None = None
+    current_permit: str | None = None
+    spouse_nationality: str | None = None
     sponsor_permit: str | None = None
     relationship: str | None = None
-    age: int | None = None
+    driving_licence_country: str | None = None
+    swiss_residence_start_date: str | None = None

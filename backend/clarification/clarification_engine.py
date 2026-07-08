@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from backend.clarification.procedure_schemas import ProcedureSchema, get_procedure_schema
+from backend.clarification.procedure_schemas import (
+    PROCEDURE_SCHEMAS,
+    ProcedureSchema,
+)
 from backend.models.clarification import (
     ClarificationQuestion,
     ClarificationResult,
@@ -14,6 +17,13 @@ from backend.models.user_profile import UserProfile
 class ClarificationEngine:
     """Generate clarification questions for missing required fields."""
 
+    def __init__(
+        self,
+        *,
+        procedure_schemas: dict[str, ProcedureSchema] | None = None,
+    ) -> None:
+        self._procedure_schemas = procedure_schemas or PROCEDURE_SCHEMAS
+
     def evaluate(
         self,
         *,
@@ -23,7 +33,7 @@ class ClarificationEngine:
     ) -> ClarificationResult:
         """Return whether clarification is needed before retrieval."""
 
-        schema = get_procedure_schema(detected_intent.intent)
+        schema = self._procedure_schemas.get(detected_intent.intent)
         if schema is None:
             return ClarificationResult(
                 intent=detected_intent,
@@ -38,10 +48,10 @@ class ClarificationEngine:
         questions = [
             ClarificationQuestion(
                 field=field,
-                question=schema.clarification_questions[field],
+                question=schema.questions[field],
             )
             for field in missing_fields
-            if field in schema.clarification_questions
+            if field in schema.questions
         ]
 
         return ClarificationResult(

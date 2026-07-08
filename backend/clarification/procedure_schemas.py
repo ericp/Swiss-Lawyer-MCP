@@ -1,4 +1,4 @@
-"""Configurable procedure schemas for clarification."""
+"""Deterministic procedure schemas for clarification."""
 
 from __future__ import annotations
 
@@ -11,31 +11,41 @@ class ProcedureSchema(BaseModel):
     intent: str = Field(min_length=1)
     required_fields: list[str]
     optional_fields: list[str] = Field(default_factory=list)
-    clarification_questions: dict[str, str]
+    field_descriptions: dict[str, str]
+    questions: dict[str, str]
     intent_keywords: list[str] = Field(default_factory=list)
 
 
 PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
-    "Immigration": ProcedureSchema(
-        intent="Immigration",
+    "immigration": ProcedureSchema(
+        intent="immigration",
         required_fields=[
             "nationality",
             "intended_canton",
+            "purpose_of_stay",
             "employment_status",
         ],
         optional_fields=[
             "age",
             "education",
+            "profession",
             "marital_status",
             "children",
             "criminal_record",
-            "profession",
             "current_country",
+            "intended_city",
         ],
-        clarification_questions={
+        field_descriptions={
+            "nationality": "Citizenship of the person moving to Switzerland.",
+            "intended_canton": "Swiss canton or city where the person plans to live.",
+            "purpose_of_stay": "Main reason for moving, such as work, study, family, or no gainful activity.",
+            "employment_status": "Whether the person will be employed, self-employed, studying, joining family, or not working.",
+        },
+        questions={
             "nationality": "What is your nationality?",
-            "intended_canton": "Which canton do you intend to move to?",
-            "employment_status": "Will you be employed in Switzerland?",
+            "intended_canton": "Which Swiss canton or city are you planning to move to?",
+            "purpose_of_stay": "What is your main purpose for moving to Switzerland?",
+            "employment_status": "Will you be employed, self-employed, studying, joining family, or moving without work?",
         },
         intent_keywords=[
             "immigrate",
@@ -43,27 +53,38 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "move to switzerland",
             "relocate",
             "live in switzerland",
+            "moving to switzerland",
         ],
     ),
-    "Residence Permit": ProcedureSchema(
-        intent="Residence Permit",
+    "residence_permit": ProcedureSchema(
+        intent="residence_permit",
         required_fields=[
             "nationality",
             "current_country",
             "intended_canton",
+            "purpose_of_stay",
             "employment_status",
         ],
         optional_fields=[
-            "residence_permit",
+            "current_permit",
             "profession",
             "education",
             "marital_status",
             "children",
+            "intended_city",
         ],
-        clarification_questions={
+        field_descriptions={
+            "nationality": "Citizenship of the applicant.",
+            "current_country": "Country where the applicant currently resides.",
+            "intended_canton": "Swiss canton where the applicant plans to reside.",
+            "purpose_of_stay": "Reason for residence in Switzerland.",
+            "employment_status": "Planned work or non-work status in Switzerland.",
+        },
+        questions={
             "nationality": "What is your nationality?",
             "current_country": "Which country do you currently live in?",
-            "intended_canton": "Which canton do you plan to live in?",
+            "intended_canton": "Which Swiss canton do you plan to live in?",
+            "purpose_of_stay": "What is your main purpose for staying in Switzerland?",
             "employment_status": "What will your employment status be in Switzerland?",
         },
         intent_keywords=[
@@ -75,8 +96,8 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "stay permit",
         ],
     ),
-    "Work Permit": ProcedureSchema(
-        intent="Work Permit",
+    "work_permit": ProcedureSchema(
+        intent="work_permit",
         required_fields=[
             "nationality",
             "intended_canton",
@@ -86,11 +107,19 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
         optional_fields=[
             "education",
             "current_country",
-            "residence_permit",
+            "current_permit",
+            "purpose_of_stay",
+            "intended_city",
         ],
-        clarification_questions={
+        field_descriptions={
+            "nationality": "Citizenship of the worker.",
+            "intended_canton": "Swiss canton where the work would take place.",
+            "profession": "Occupation or job role.",
+            "employment_status": "Employment arrangement, such as employed or self-employed.",
+        },
+        questions={
             "nationality": "What is your nationality?",
-            "intended_canton": "In which canton would you work?",
+            "intended_canton": "In which Swiss canton would you work?",
             "profession": "What is your profession or job role?",
             "employment_status": "Will you be employed, self-employed, or seeking work?",
         },
@@ -103,10 +132,10 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "swiss company",
         ],
     ),
-    "Family Reunification": ProcedureSchema(
-        intent="Family Reunification",
+    "family_reunification": ProcedureSchema(
+        intent="family_reunification",
         required_fields=[
-            "sponsor_nationality",
+            "spouse_nationality",
             "sponsor_permit",
             "relationship",
         ],
@@ -115,10 +144,16 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "intended_canton",
             "children",
             "marital_status",
+            "current_permit",
         ],
-        clarification_questions={
-            "sponsor_nationality": "What is the sponsor's nationality?",
-            "sponsor_permit": "What Swiss permit or status does the sponsor have?",
+        field_descriptions={
+            "spouse_nationality": "Nationality of the Swiss-based sponsor or spouse.",
+            "sponsor_permit": "Swiss permit or status held by the sponsor.",
+            "relationship": "Family relationship between applicant and sponsor.",
+        },
+        questions={
+            "spouse_nationality": "What is the nationality of your spouse or Swiss-based sponsor?",
+            "sponsor_permit": "What Swiss permit or status does your sponsor have?",
             "relationship": "What is your relationship to the sponsor?",
         },
         intent_keywords=[
@@ -131,8 +166,8 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "family reunion",
         ],
     ),
-    "Municipality Registration": ProcedureSchema(
-        intent="Municipality Registration",
+    "municipality_registration": ProcedureSchema(
+        intent="municipality_registration",
         required_fields=[
             "intended_canton",
             "current_country",
@@ -140,10 +175,16 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
         ],
         optional_fields=[
             "nationality",
-            "residence_permit",
+            "current_permit",
+            "intended_city",
         ],
-        clarification_questions={
-            "intended_canton": "In which canton or municipality will you register?",
+        field_descriptions={
+            "intended_canton": "Swiss canton or municipality where the person will register.",
+            "current_country": "Country the person is moving from.",
+            "swiss_residence_start_date": "Date Swiss residence begins or began.",
+        },
+        questions={
+            "intended_canton": "In which Swiss canton or municipality will you register?",
             "current_country": "Which country are you moving from?",
             "swiss_residence_start_date": "When will your Swiss residence start?",
         },
@@ -157,20 +198,26 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "moving address",
         ],
     ),
-    "Driving Licence Exchange": ProcedureSchema(
-        intent="Driving Licence Exchange",
+    "driving_licence_exchange": ProcedureSchema(
+        intent="driving_licence_exchange",
         required_fields=[
             "driving_licence_country",
-            "canton_of_residence",
+            "intended_canton",
             "swiss_residence_start_date",
         ],
         optional_fields=[
             "nationality",
-            "residence_permit",
+            "current_permit",
+            "intended_city",
         ],
-        clarification_questions={
+        field_descriptions={
+            "driving_licence_country": "Country that issued the foreign driving licence.",
+            "intended_canton": "Swiss canton of residence responsible for the exchange procedure.",
+            "swiss_residence_start_date": "Date Swiss residence began.",
+        },
+        questions={
             "driving_licence_country": "Which country issued your driving licence?",
-            "canton_of_residence": "What is your canton of residence in Switzerland?",
+            "intended_canton": "What is your Swiss canton of residence?",
             "swiss_residence_start_date": "When did your Swiss residence start?",
         },
         intent_keywords=[
@@ -184,12 +231,12 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "exchange my license",
         ],
     ),
-    "Citizenship / Naturalization": ProcedureSchema(
-        intent="Citizenship / Naturalization",
+    "citizenship": ProcedureSchema(
+        intent="citizenship",
         required_fields=[
             "nationality",
-            "canton_of_residence",
-            "residence_permit",
+            "intended_canton",
+            "current_permit",
             "swiss_residence_start_date",
         ],
         optional_fields=[
@@ -198,11 +245,18 @@ PROCEDURE_SCHEMAS: dict[str, ProcedureSchema] = {
             "children",
             "criminal_record",
             "education",
+            "intended_city",
         ],
-        clarification_questions={
+        field_descriptions={
+            "nationality": "Current nationality of the applicant.",
+            "intended_canton": "Canton of residence, because naturalization has cantonal and communal components.",
+            "current_permit": "Current Swiss residence permit or status.",
+            "swiss_residence_start_date": "Date Swiss residence began.",
+        },
+        questions={
             "nationality": "What is your current nationality?",
-            "canton_of_residence": "What is your canton of residence?",
-            "residence_permit": "What Swiss residence permit do you currently hold?",
+            "intended_canton": "What is your Swiss canton of residence?",
+            "current_permit": "What Swiss residence permit do you currently hold?",
             "swiss_residence_start_date": "When did your Swiss residence start?",
         },
         intent_keywords=[
