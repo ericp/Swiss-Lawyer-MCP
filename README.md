@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, and **Phase 4.2: schema-driven clarification**. It does not yet implement memory, planning, answer generation, FastAPI, synchronization, or MCP integration.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, and **Phase 5: grounded answer generation**. It does not yet implement memory, planning, FastAPI, synchronization, or MCP integration.
 
 ## Safety Scope
 
@@ -28,6 +28,12 @@ Swiss Lawyer MCP/
 │   │   ├── procedure_schemas.py
 │   │   └── test_clarification.py
 │   ├── generation/
+│   │   ├── __init__.py
+│   │   ├── answer_generator.py
+│   │   ├── confidence.py
+│   │   ├── prompts.py
+│   │   ├── source_attribution.py
+│   │   └── test_generation.py
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   ├── chunking.py
@@ -42,11 +48,13 @@ Swiss Lawyer MCP/
 │   │   ├── chunk.py
 │   │   ├── clarification.py
 │   │   ├── document.py
+│   │   ├── generation.py
 │   │   ├── reranking.py
 │   │   ├── retrieval.py
 │   │   └── user_profile.py
 │   ├── planners/
 │   ├── prompts/
+│   │   └── grounded_answer_system_prompt.txt
 │   ├── reranking/
 │   │   ├── __init__.py
 │   │   ├── reranker.py
@@ -79,12 +87,15 @@ Swiss Lawyer MCP/
 ├── evaluation/
 ├── notebooks/
 └── tests/
+    ├── test_answer_generator.py
     ├── test_bm25_retrieval.py
     ├── test_clarification_engine.py
     ├── test_chunking.py
     ├── test_discovery.py
     ├── test_embeddings.py
     ├── test_extraction.py
+    ├── test_generation_models.py
+    ├── test_generation_prompts.py
     ├── test_hybrid_retrieval.py
     ├── test_index.py
     ├── test_intent_classifier.py
@@ -92,12 +103,13 @@ Swiss Lawyer MCP/
     ├── test_reranking_models.py
     ├── test_reranking_service.py
     ├── test_retrieval_models.py
+    ├── test_source_attribution.py
     ├── test_user_profile.py
     ├── test_vector_retrieval.py
     └── test_vector_store.py
 ```
 
-Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, and Phase 4.2 clarification are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
+Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, and Phase 5 grounded generation are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -128,6 +140,7 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `RETRIEVAL_TOP_K` | `10` | Default number of candidates returned by each retrieval method |
 | `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Local Sentence Transformers CrossEncoder model |
 | `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
+| `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
 
 ## Run Ingestion
 
@@ -218,6 +231,65 @@ To add a new procedure, add one entry to `PROCEDURE_SCHEMAS` with its required f
 python -m backend.clarification.test_clarification \
   "Can I move to Switzerland as a Brazilian citizen?" \
   --profile-json '{"nationality":"Brazil"}'
+```
+
+## Grounded Answer Generation
+
+Phase 5 adds final answer generation after clarification, hybrid retrieval, and reranking. The generator receives the user question, detected intent, completed user profile, and top reranked chunks. It does not perform retrieval.
+
+Current end-to-end architecture:
+
+```text
+Question
+↓
+Clarification
+↓
+Hybrid Retrieval
+↓
+Reranker
+↓
+Grounded Answer Generation
+```
+
+Grounded generation uses a reusable system prompt stored in `backend/prompts/grounded_answer_system_prompt.txt`. The prompt instructs the GPT model to answer only from supplied official context, never invent rules, documents, deadlines, authorities, or procedures, and explicitly say when retrieved context is insufficient.
+
+The generated answer is structured as:
+
+- short direct answer
+- explanation
+- procedure steps
+- important notes
+- cited official sources
+- deterministic confidence label
+- insufficient-context flag
+
+If no reranked context is available, the generator does not call OpenAI. It returns:
+
+```text
+The retrieved official documentation does not contain enough information to answer this question completely.
+```
+
+### Source Attribution
+
+Every generated answer includes source attribution from the reranked chunks. Citations include source filename, page number when available, and region. This is essential for legal/procedural workflows because users need to see where guidance came from, and later evaluation can verify whether the answer was actually grounded in official evidence.
+
+### Confidence Estimation
+
+Confidence is not GPT self-reported confidence. It is estimated deterministically from retrieval quality signals:
+
+- number of reranked chunks
+- number of unique sources
+- average rerank score
+
+This keeps confidence tied to evidence quality rather than model tone.
+
+## Test Generation
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+python -m backend.generation.test_generation \
+  "Can a Brazilian citizen work in Switzerland?" \
+  --profile-json '{"nationality":"Brazil","employment_status":"Swiss job offer","purpose_of_stay":"work","intended_canton":"Zurich"}'
 ```
 
 ## Test Retrieval

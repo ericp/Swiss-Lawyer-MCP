@@ -1,4 +1,4 @@
-"""Configuration helpers for ingestion and retrieval."""
+"""Configuration helpers for ingestion, retrieval, and generation."""
 
 from __future__ import annotations
 
@@ -61,4 +61,21 @@ def load_retrieval_settings() -> RetrievalSettings:
             "cross-encoder/ms-marco-MiniLM-L-6-v2",
         ),
         rerank_top_k=int(os.getenv("RERANK_TOP_K", "5")),
+    )
+
+
+@dataclass(frozen=True)
+class GenerationSettings:
+    """Runtime settings for the Phase 5 grounded generation pipeline."""
+
+    openai_api_key: str | None = None
+    model: str = "gpt-4o-mini"
+
+
+def load_generation_settings() -> GenerationSettings:
+    """Load generation settings from environment variables."""
+
+    return GenerationSettings(
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-4o-mini"),
     )
