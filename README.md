@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, and **Phase 3: reranking**. It does not yet implement memory, planning, answer generation, FastAPI, synchronization, or MCP integration.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, and **Phase 4.2: schema-driven clarification**. It does not yet implement memory, planning, answer generation, FastAPI, synchronization, or MCP integration.
 
 ## Safety Scope
 
@@ -22,6 +22,11 @@ Swiss Lawyer MCP/
 │   ├── __init__.py
 │   ├── api/
 │   ├── clarification/
+│   │   ├── __init__.py
+│   │   ├── clarification_engine.py
+│   │   ├── intent_classifier.py
+│   │   ├── procedure_schemas.py
+│   │   └── test_clarification.py
 │   ├── generation/
 │   ├── ingestion/
 │   │   ├── __init__.py
@@ -35,9 +40,11 @@ Swiss Lawyer MCP/
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── chunk.py
+│   │   ├── clarification.py
 │   │   ├── document.py
 │   │   ├── reranking.py
-│   │   └── retrieval.py
+│   │   ├── retrieval.py
+│   │   └── user_profile.py
 │   ├── planners/
 │   ├── prompts/
 │   ├── reranking/
@@ -73,21 +80,24 @@ Swiss Lawyer MCP/
 ├── notebooks/
 └── tests/
     ├── test_bm25_retrieval.py
+    ├── test_clarification_engine.py
     ├── test_chunking.py
     ├── test_discovery.py
     ├── test_embeddings.py
     ├── test_extraction.py
     ├── test_hybrid_retrieval.py
     ├── test_index.py
+    ├── test_intent_classifier.py
     ├── test_reranker.py
     ├── test_reranking_models.py
     ├── test_reranking_service.py
     ├── test_retrieval_models.py
+    ├── test_user_profile.py
     ├── test_vector_retrieval.py
     └── test_vector_store.py
 ```
 
-Only Phase 1 ingestion, Phase 2 retrieval, and Phase 3 reranking are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
+Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, and Phase 4.2 clarification are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -167,6 +177,47 @@ Merged Candidates
 Reranker
 ↓
 Top Relevant Chunks
+```
+
+## Clarification
+
+Clarification is schema-driven. Before retrieval and answer generation, the system classifies the user's intent and checks the known user profile against deterministic procedure schemas.
+
+Current clarification architecture:
+
+```text
+Question
+↓
+Intent Classification
+↓
+Clarification Engine
+↓
+Clarification Questions
+↓
+(Next phase: Answer Generation)
+```
+
+Each supported procedure has one centralized schema in `backend/clarification/procedure_schemas.py`. A schema defines:
+
+- intent name
+- required fields
+- optional fields
+- field descriptions
+- default clarification question for each required field
+- intent keywords
+
+The clarification engine asks all and only missing required fields for the detected procedure. This matters in legal and administrative workflows because nationality, canton, permit status, purpose of stay, and dates can materially change eligibility, documents, competent authority, steps, timelines, and applicable federal or cantonal rules.
+
+Asking fewer but more relevant questions improves the user experience and avoids unnecessary LLM calls. It is also safer and easier to test: required information is determined by versioned schemas, not by a model improvising case-by-case.
+
+To add a new procedure, add one entry to `PROCEDURE_SCHEMAS` with its required fields, optional fields, descriptions, questions, and keywords. The classifier and clarification engine will use it automatically.
+
+## Test Clarification
+
+```bash
+python -m backend.clarification.test_clarification \
+  "Can I move to Switzerland as a Brazilian citizen?" \
+  --profile-json '{"nationality":"Brazil"}'
 ```
 
 ## Test Retrieval

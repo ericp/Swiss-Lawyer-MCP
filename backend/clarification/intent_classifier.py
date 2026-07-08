@@ -5,7 +5,7 @@ from __future__ import annotations
 from backend.clarification.procedure_schemas import list_procedure_schemas
 from backend.models.clarification import DetectedIntent
 
-DEFAULT_INTENT = "Immigration"
+DEFAULT_INTENT = "immigration"
 
 
 class IntentClassifier:
