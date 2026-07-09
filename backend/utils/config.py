@@ -66,10 +66,11 @@ def load_retrieval_settings() -> RetrievalSettings:
 
 @dataclass(frozen=True)
 class GenerationSettings:
-    """Runtime settings for the Phase 5 grounded generation pipeline."""
+    """Runtime settings for Phase 5 generation and Phase 6 planning."""
 
     openai_api_key: str | None = None
     model: str = "gpt-4o-mini"
+    planner_model: str = "gpt-4o-mini"
 
 
 def load_generation_settings() -> GenerationSettings:
@@ -78,4 +79,5 @@ def load_generation_settings() -> GenerationSettings:
     return GenerationSettings(
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-4o-mini"),
+        planner_model=os.getenv("OPENAI_PLANNER_MODEL", "gpt-4o-mini"),
     )
