@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, and **Phase 5: grounded answer generation**. It does not yet implement memory, planning, FastAPI, synchronization, or MCP integration.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, and **Phase 6: planner/workflow engine**. It does not yet implement memory, FastAPI, synchronization, or MCP integration.
 
 ## Safety Scope
 
@@ -49,12 +49,18 @@ Swiss Lawyer MCP/
 │   │   ├── clarification.py
 │   │   ├── document.py
 │   │   ├── generation.py
+│   │   ├── planner.py
 │   │   ├── reranking.py
 │   │   ├── retrieval.py
 │   │   └── user_profile.py
 │   ├── planners/
+│   │   ├── __init__.py
+│   │   ├── prompts.py
+│   │   ├── test_planner.py
+│   │   └── workflow_planner.py
 │   ├── prompts/
-│   │   └── grounded_answer_system_prompt.txt
+│   │   ├── grounded_answer_system_prompt.txt
+│   │   └── workflow_planner_system_prompt.txt
 │   ├── reranking/
 │   │   ├── __init__.py
 │   │   ├── reranker.py
@@ -99,6 +105,7 @@ Swiss Lawyer MCP/
     ├── test_hybrid_retrieval.py
     ├── test_index.py
     ├── test_intent_classifier.py
+    ├── test_planner_models.py
     ├── test_reranker.py
     ├── test_reranking_models.py
     ├── test_reranking_service.py
@@ -106,10 +113,11 @@ Swiss Lawyer MCP/
     ├── test_source_attribution.py
     ├── test_user_profile.py
     ├── test_vector_retrieval.py
-    └── test_vector_store.py
+    ├── test_vector_store.py
+    └── test_workflow_planner.py
 ```
 
-Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, and Phase 5 grounded generation are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
+Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, Phase 5 grounded generation, and Phase 6 planning are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -141,6 +149,7 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Local Sentence Transformers CrossEncoder model |
 | `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
 | `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
+| `OPENAI_PLANNER_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for workflow planning |
 
 ## Run Ingestion
 
@@ -290,6 +299,61 @@ export OPENAI_API_KEY="your-api-key"
 python -m backend.generation.test_generation \
   "Can a Brazilian citizen work in Switzerland?" \
   --profile-json '{"nationality":"Brazil","employment_status":"Swiss job offer","purpose_of_stay":"work","intended_canton":"Zurich"}'
+```
+
+## Planner & Workflow Engine
+
+Phase 6 converts a grounded answer into an actionable procedure workflow. The planner receives the user question, detected intent, completed profile, generated answer, citations, and reranked evidence. It does not perform retrieval and does not invent missing procedural details.
+
+Current architecture:
+
+```text
+Question
+↓
+Clarification
+↓
+Hybrid Retrieval
+↓
+Reranker
+↓
+Grounded Answer Generation
+↓
+Planner & Workflow Engine
+```
+
+Answer generation explains what the retrieved evidence supports. Planning turns that grounded explanation into a workflow with:
+
+- title and summary
+- step-by-step plan
+- required documents
+- estimated timelines
+- potential blockers
+- next recommended action
+- workflow status
+- source references
+- missing information
+
+The planner prompt is stored in `backend/prompts/workflow_planner_system_prompt.txt`. It instructs the model to use only the grounded answer and cited evidence. Unsupported deadlines, documents, offices, fees, authorities, or eligibility rules must be written as:
+
+```text
+Not specified in retrieved sources.
+```
+
+Workflow status values are:
+
+- `ready_to_start`: enough information exists to begin.
+- `needs_more_information`: important information is missing.
+- `blocked`: the grounded answer indicates the user may not currently qualify or cannot proceed.
+- `in_progress`: reserved for future memory support.
+- `completed`: reserved for future memory support.
+
+These statuses prepare the project for SQLite memory in Phase 7 because a future persistent workflow record can track whether a user has started, completed, or is blocked on specific procedure steps.
+
+## Test Planner
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+python -m backend.planners.test_planner
 ```
 
 ## Test Retrieval
