@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, and **Phase 6: planner/workflow engine**. It does not yet implement memory, FastAPI, synchronization, or MCP integration.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, and **Phase 7: SQLite memory**. It does not yet implement FastAPI, synchronization, or MCP integration.
 
 ## Safety Scope
 
@@ -15,7 +15,13 @@ Swiss Lawyer MCP/
 ├── .env.example
 ├── .gitignore
 ├── README.md
+├── alembic.ini
 ├── docker-compose.yml
+├── migrations/
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions/
+│       └── 0001_phase_7_memory.py
 ├── pytest.ini
 ├── requirements.txt
 ├── backend/
@@ -43,12 +49,25 @@ Swiss Lawyer MCP/
 │   │   ├── index.py
 │   │   └── vector_store.py
 │   ├── memory/
+│   │   ├── __init__.py
+│   │   ├── database.py
+│   │   ├── memory_service.py
+│   │   ├── models.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── converters.py
+│   │   │   ├── interaction_repository.py
+│   │   │   ├── procedure_repository.py
+│   │   │   ├── profile_repository.py
+│   │   │   └── user_repository.py
+│   │   └── test_memory.py
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── chunk.py
 │   │   ├── clarification.py
 │   │   ├── document.py
 │   │   ├── generation.py
+│   │   ├── memory.py
 │   │   ├── planner.py
 │   │   ├── reranking.py
 │   │   ├── retrieval.py
@@ -105,6 +124,7 @@ Swiss Lawyer MCP/
     ├── test_hybrid_retrieval.py
     ├── test_index.py
     ├── test_intent_classifier.py
+    ├── test_memory_service.py
     ├── test_planner_models.py
     ├── test_reranker.py
     ├── test_reranking_models.py
@@ -117,7 +137,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, Phase 5 grounded generation, and Phase 6 planning are implemented right now. Some backend folders such as `api/`, `memory/`, and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, and generated ChromaDB files are intentionally omitted from this tree.
+Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, Phase 5 grounded generation, Phase 6 planning, and Phase 7 memory are implemented right now. Some backend folders such as `api/` and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -150,6 +170,15 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
 | `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
 | `OPENAI_PLANNER_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for workflow planning |
+
+## Storage Roles
+
+Swiss Lawyer MCP uses two separate storage systems:
+
+- **ChromaDB** stores official Swiss knowledge and document chunks.
+- **SQLite** stores user-specific memory: profile facts, saved procedures, progress, and concise summaries.
+
+Keeping these stores separate prevents user memory from mixing with the legal/procedural knowledge base.
 
 ## Run Ingestion
 
@@ -354,6 +383,81 @@ These statuses prepare the project for SQLite memory in Phase 7 because a future
 ```bash
 export OPENAI_API_KEY="your-api-key"
 python -m backend.planners.test_planner
+```
+
+## SQLite Memory
+
+Phase 7 adds persistent, structured user memory at:
+
+```text
+data/sqlite/memory.db
+```
+
+The memory layer stores only procedure-relevant structured information. It does not store API keys, passwords, identity documents, uploaded document contents, or full conversation transcripts by default. It stores concise summaries and JSON-compatible profile facts that can be inspected and deleted.
+
+### Database Schema
+
+The initial Alembic migration creates:
+
+- `users`: user records with optional `external_user_key`
+- `user_profile_facts`: flexible confirmed or unconfirmed profile facts keyed by `user_id + field_name`
+- `procedures`: saved `ProcedurePlan` JSON, workflow status, current step, and progress timestamps
+- `procedure_interactions`: concise interaction summaries and optional structured payloads
+
+Profile facts are flexible so new clarification fields can be added without a database migration.
+
+### Migrations
+
+Run migrations before using the real memory database:
+
+```bash
+.venv/bin/alembic upgrade head
+```
+
+Tests run migrations against temporary SQLite databases and do not modify `data/sqlite/memory.db`.
+
+### Memory CLI Demo
+
+```bash
+python -m backend.memory.test_memory
+```
+
+The demo creates or retrieves a demo user, saves confirmed profile facts, reconstructs a Phase 4 `UserProfile`, saves a Phase 6 `ProcedurePlan`, records an interaction summary, updates procedure status, builds a `MemoryContext`, and deletes a separate demo user.
+
+### Procedure Resumption
+
+`MemoryService.build_memory_context(...)` loads:
+
+- known user profile facts as a Phase 4 `UserProfile`
+- an active procedure when a `procedure_id` is supplied
+- active procedures filtered deterministically by intent/question and status
+- recent interaction summaries
+- saved `ProcedurePlan`, latest status, and current step
+
+Future FastAPI and MCP layers can load this context before clarification, so users are not repeatedly asked for already confirmed information.
+
+Updated architecture:
+
+```text
+Official PDFs
+↓
+Ingestion
+↓
+ChromaDB
+
+User interaction
+↓
+Clarification
+↓
+Retrieval and reranking
+↓
+Grounded answer
+↓
+Planner
+↓
+SQLite memory
+↓
+Future procedure continuation
 ```
 
 ## Test Retrieval
