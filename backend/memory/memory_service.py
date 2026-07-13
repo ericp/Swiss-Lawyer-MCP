@@ -159,6 +159,17 @@ class MemoryService:
             procedure = ProcedureRepository(session).get_procedure(procedure_id)
             return procedure_to_model(procedure) if procedure is not None else None
 
+    def get_user_procedure(
+        self,
+        *,
+        user_id: str,
+        procedure_id: str,
+    ) -> SavedProcedure | None:
+        procedure = self.get_procedure(procedure_id)
+        if procedure is None or procedure.user_id != user_id:
+            return None
+        return procedure
+
     def list_active_procedures(
         self,
         *,
@@ -170,6 +181,35 @@ class MemoryService:
                 user_id,
                 intent=intent,
             )
+            return [procedure_to_model(procedure) for procedure in procedures]
+
+    def list_procedures(
+        self,
+        *,
+        user_id: str,
+        intent: str | None = None,
+        status: WorkflowStatus | None = None,
+        active_only: bool = False,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[SavedProcedure]:
+        with self._session_factory() as session:
+            repository = ProcedureRepository(session)
+            procedures = (
+                repository.list_active_procedures(user_id, intent=intent)
+                if active_only
+                else repository.list_procedures_for_user(user_id, intent=intent)
+            )
+            if status is not None:
+                procedures = [
+                    procedure
+                    for procedure in procedures
+                    if procedure.status == status.value
+                ]
+            if offset:
+                procedures = procedures[offset:]
+            if limit is not None:
+                procedures = procedures[:limit]
             return [procedure_to_model(procedure) for procedure in procedures]
 
     def update_procedure_plan(
@@ -254,6 +294,19 @@ class MemoryService:
         with self._session_factory() as session:
             interactions = InteractionRepository(session).list_recent_interactions(
                 procedure_ids=procedure_ids,
+                limit=limit,
+            )
+            return [interaction_to_model(interaction) for interaction in interactions]
+
+    def list_interactions_for_procedure(
+        self,
+        *,
+        procedure_id: str,
+        limit: int | None = None,
+    ) -> list[ProcedureInteraction]:
+        with self._session_factory() as session:
+            interactions = InteractionRepository(session).list_interactions_for_procedure(
+                procedure_id=procedure_id,
                 limit=limit,
             )
             return [interaction_to_model(interaction) for interaction in interactions]

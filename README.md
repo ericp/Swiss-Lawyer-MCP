@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, and **Phase 7: SQLite memory**. It does not yet implement FastAPI, synchronization, or MCP integration.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, and **Phase 8: FastAPI orchestration**. It does not yet implement automatic synchronization, MCP integration, OAuth, a frontend, cloud deployment, or RAGAS evaluation.
 
 ## Safety Scope
 
@@ -27,6 +27,15 @@ Swiss Lawyer MCP/
 ├── backend/
 │   ├── __init__.py
 │   ├── api/
+│   │   ├── __init__.py
+│   │   ├── app.py
+│   │   ├── dependencies.py
+│   │   ├── error_handlers.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── health.py
+│   │   │   └── procedures.py
+│   │   └── schemas.py
 │   ├── clarification/
 │   │   ├── __init__.py
 │   │   ├── clarification_engine.py
@@ -48,6 +57,9 @@ Swiss Lawyer MCP/
 │   │   ├── extraction.py
 │   │   ├── index.py
 │   │   └── vector_store.py
+│   ├── location/
+│   │   ├── __init__.py
+│   │   └── canton_resolver.py
 │   ├── memory/
 │   │   ├── __init__.py
 │   │   ├── database.py
@@ -72,6 +84,10 @@ Swiss Lawyer MCP/
 │   │   ├── reranking.py
 │   │   ├── retrieval.py
 │   │   └── user_profile.py
+│   ├── orchestration/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   └── procedure_orchestrator.py
 │   ├── planners/
 │   │   ├── __init__.py
 │   │   ├── prompts.py
@@ -91,7 +107,6 @@ Swiss Lawyer MCP/
 │   │   ├── hybrid.py
 │   │   ├── test_retrieval.py
 │   │   └── vector.py
-│   ├── synchronizer/
 │   └── utils/
 │       ├── __init__.py
 │       └── config.py
@@ -125,6 +140,7 @@ Swiss Lawyer MCP/
     ├── test_index.py
     ├── test_intent_classifier.py
     ├── test_memory_service.py
+    ├── test_phase8_api_orchestration.py
     ├── test_planner_models.py
     ├── test_reranker.py
     ├── test_reranking_models.py
@@ -137,7 +153,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Only Phase 1 ingestion, Phase 2 retrieval, Phase 3 reranking, Phase 4.2 clarification, Phase 5 grounded generation, Phase 6 planning, and Phase 7 memory are implemented right now. Some backend folders such as `api/` and `synchronizer/` already exist as placeholders for later phases. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 8 FastAPI orchestration are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -170,6 +186,11 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
 | `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
 | `OPENAI_PLANNER_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for workflow planning |
+| `API_HOST` | `127.0.0.1` | Local FastAPI host |
+| `API_PORT` | `8000` | Local FastAPI port |
+| `SQLITE_DATABASE_URL` | `sqlite:///data/sqlite/memory.db` | SQLAlchemy database URL for user memory |
+| `REQUEST_TIMEOUT_SECONDS` | `60` | Request timeout budget for API clients and future callers |
+| `LOG_LEVEL` | `INFO` | API logging level |
 
 ## Storage Roles
 
@@ -458,6 +479,148 @@ Planner
 SQLite memory
 ↓
 Future procedure continuation
+```
+
+## FastAPI Orchestration
+
+Phase 8 exposes the workflow through FastAPI and connects the existing domain services without duplicating their logic.
+
+Run locally:
+
+```bash
+uvicorn backend.api.app:app --reload
+```
+
+The API layer is intentionally thin:
+
+- `backend/api/app.py` creates the FastAPI application.
+- `backend/api/dependencies.py` wires reusable services and cached expensive components.
+- `backend/api/routes/health.py` exposes dependency health checks.
+- `backend/api/routes/procedures.py` exposes procedure query, read, update, list, and memory deletion endpoints.
+- `backend/orchestration/procedure_orchestrator.py` coordinates clarification, retrieval, reranking, generation, planning, and memory.
+- `backend/location/canton_resolver.py` deterministically resolves known Swiss cities to cantons.
+
+Current Phase 8 architecture:
+
+```text
+ChatGPT in a later phase
+↓
+MCP in a later phase
+↓
+FastAPI
+↓
+ProcedureOrchestrator
+├── SQLite memory
+├── Clarification engine
+├── Hybrid retrieval
+├── Reranker
+├── Grounded generation
+└── Workflow planner
+```
+
+Complete request lifecycle:
+
+```text
+Request
+↓
+Resolve or create user
+↓
+Load SQLite memory
+↓
+Persist explicitly confirmed profile updates
+↓
+Resolve intended city to canton when possible
+↓
+Intent detection
+↓
+Clarification engine
+↓
+If required information is missing: return questions and stop
+↓
+Hybrid retrieval
+↓
+Reranker
+↓
+Grounded answer generation
+↓
+Planner and workflow engine
+↓
+Save or update procedure
+↓
+Record concise interaction summary
+↓
+Return answer, plan, sources, and procedure state
+```
+
+### Endpoints
+
+- `GET /health`: checks application, SQLite, ChromaDB, and OpenAI configuration availability.
+- `POST /v1/procedures/query`: runs the clarification-first procedure workflow.
+- `GET /v1/users/{user_id}/procedures`: lists saved procedures, with optional status, intent, active-only, limit, and offset filters.
+- `GET /v1/procedures/{procedure_id}?user_id=...`: reads one saved procedure with recent interaction summaries.
+- `PATCH /v1/procedures/{procedure_id}`: updates status, current step, confirmed profile facts, and progress notes.
+- `DELETE /v1/users/{user_id}/memory`: deletes user-specific SQLite memory only. It does not delete ChromaDB official knowledge.
+
+### Query Example
+
+```bash
+curl -X POST http://localhost:8000/v1/procedures/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user_key": "demo-user",
+    "question": "Can I move to Switzerland as a Brazilian citizen?",
+    "profile_updates": {
+      "nationality": "Brazil"
+    },
+    "confirmed_profile_fields": [
+      "nationality"
+    ]
+  }'
+```
+
+When clarification is still required, the API stops before retrieval, reranking, generation, and planning:
+
+```json
+{
+  "state": "clarification_required",
+  "needs_clarification": true,
+  "missing_fields": [
+    "intended_canton",
+    "purpose_of_stay",
+    "employment_status"
+  ],
+  "clarification_questions": [
+    {
+      "field": "intended_canton",
+      "question": "Which Swiss canton or city are you planning to move to?"
+    }
+  ]
+}
+```
+
+Only profile fields listed in `confirmed_profile_fields` are stored as confirmed memory. Unconfirmed `profile_updates` can be used for the current request, but they are not persisted as confirmed user facts.
+
+### City-to-Canton Resolution
+
+`CantonResolver` maps known Swiss cities deterministically, for example:
+
+- Zurich or Zürich → `ZH`
+- Geneva or Genève → `GE`
+- Lausanne → `VD`
+- Bern or Berne → `BE`
+- Basel → `BS`
+- Lugano → `TI`
+
+If a city is unknown or ambiguous, the API returns a clarification question instead of guessing a canton.
+
+### Procedure Continuation
+
+When `procedure_id` is supplied, the API verifies that the procedure belongs to the resolved user before reading or updating it. This ownership check exists even though authentication is not implemented yet. Saved procedures keep their validated Phase 6 `ProcedurePlan`, workflow status, current step, and recent concise interaction summaries.
+
+Every query response includes the disclaimer:
+
+```text
+This information is based on retrieved official Swiss sources and is provided for informational purposes only. It does not constitute legal advice.
 ```
 
 ## Test Retrieval

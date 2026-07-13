@@ -81,3 +81,29 @@ def load_generation_settings() -> GenerationSettings:
         model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-4o-mini"),
         planner_model=os.getenv("OPENAI_PLANNER_MODEL", "gpt-4o-mini"),
     )
+
+
+@dataclass(frozen=True)
+class APISettings:
+    """Runtime settings for the Phase 8 FastAPI application."""
+
+    host: str = "127.0.0.1"
+    port: int = 8000
+    sqlite_database_url: str = "sqlite:///data/sqlite/memory.db"
+    request_timeout_seconds: int = 60
+    log_level: str = "INFO"
+
+
+def load_api_settings() -> APISettings:
+    """Load API settings from environment variables."""
+
+    return APISettings(
+        host=os.getenv("API_HOST", "127.0.0.1"),
+        port=int(os.getenv("API_PORT", "8000")),
+        sqlite_database_url=os.getenv(
+            "SQLITE_DATABASE_URL",
+            "sqlite:///data/sqlite/memory.db",
+        ),
+        request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "60")),
+        log_level=os.getenv("LOG_LEVEL", "INFO"),
+    )
