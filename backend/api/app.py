@@ -9,6 +9,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from backend.api.error_handlers import register_exception_handlers
+from backend.api.routes.admin_synchronization import router as sync_admin_router
 from backend.api.routes.health import router as health_router
 from backend.api.routes.procedures import router as procedures_router
 from backend.utils.config import load_api_settings
@@ -39,6 +40,8 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(procedures_router)
+    if load_api_settings().enable_sync_admin_endpoints:
+        app.include_router(sync_admin_router)
     return app
 
 

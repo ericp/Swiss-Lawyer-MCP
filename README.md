@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, and **Phase 8: FastAPI orchestration**. It does not yet implement automatic synchronization, MCP integration, OAuth, a frontend, cloud deployment, or RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, and **Phase 9: official source synchronization**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, or RAGAS evaluation.
 
 ## Safety Scope
 
@@ -21,7 +21,8 @@ Swiss Lawyer MCP/
 │   ├── env.py
 │   ├── script.py.mako
 │   └── versions/
-│       └── 0001_phase_7_memory.py
+│       ├── 0001_phase_7_memory.py
+│       └── 0002_phase_9_synchronizer.py
 ├── pytest.ini
 ├── requirements.txt
 ├── backend/
@@ -33,6 +34,7 @@ Swiss Lawyer MCP/
 │   │   ├── error_handlers.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
+│   │   │   ├── admin_synchronization.py
 │   │   │   ├── health.py
 │   │   │   └── procedures.py
 │   │   └── schemas.py
@@ -107,6 +109,20 @@ Swiss Lawyer MCP/
 │   │   ├── hybrid.py
 │   │   ├── test_retrieval.py
 │   │   └── vector.py
+│   ├── synchronizer/
+│   │   ├── __init__.py
+│   │   ├── cli.py
+│   │   ├── discovery.py
+│   │   ├── document_processor.py
+│   │   ├── hashing.py
+│   │   ├── html_extraction.py
+│   │   ├── http_client.py
+│   │   ├── identifiers.py
+│   │   ├── models.py
+│   │   ├── regions.py
+│   │   ├── repository.py
+│   │   ├── source_registry.py
+│   │   └── synchronizer_service.py
 │   └── utils/
 │       ├── __init__.py
 │       └── config.py
@@ -141,6 +157,7 @@ Swiss Lawyer MCP/
     ├── test_intent_classifier.py
     ├── test_memory_service.py
     ├── test_phase8_api_orchestration.py
+    ├── test_phase9_synchronizer.py
     ├── test_planner_models.py
     ├── test_reranker.py
     ├── test_reranking_models.py
@@ -153,7 +170,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 8 FastAPI orchestration are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 9 official source synchronization are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -191,6 +208,19 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `SQLITE_DATABASE_URL` | `sqlite:///data/sqlite/memory.db` | SQLAlchemy database URL for user memory |
 | `REQUEST_TIMEOUT_SECONDS` | `60` | Request timeout budget for API clients and future callers |
 | `LOG_LEVEL` | `INFO` | API logging level |
+| `ENABLE_SYNC_ADMIN_ENDPOINTS` | `false` | Enables development-only synchronization admin endpoints |
+| `SYNC_SOURCE_REGISTRY_PATH` | `data/pdfs/metadata/sources.yaml` | Curated source registry path |
+| `SYNC_PDF_PATH` | `data/pdfs` | Local storage root for synchronized PDFs |
+| `SYNC_DOCUMENT_PATH` | `data/documents` | Local storage root for normalized webpage documents |
+| `SYNC_TEMP_DOWNLOAD_PATH` | `data/tmp/synchronizer` | Temporary download location |
+| `SYNC_HTTP_TIMEOUT_SECONDS` | `30` | HTTP timeout for synchronization requests |
+| `SYNC_MAX_DOCUMENT_BYTES` | `20000000` | Maximum downloaded document size |
+| `SYNC_RETRY_COUNT` | `2` | Retry count for temporary HTTP failures |
+| `SYNC_RETRY_BACKOFF_SECONDS` | `0.25` | Exponential retry backoff base |
+| `SYNC_USER_AGENT` | `Swiss Lawyer MCP Synchronizer/0.9` | Synchronizer HTTP user agent |
+| `SYNC_RETAIN_UNAVAILABLE_SOURCES` | `true` | Retain last valid indexed version when a source is unavailable |
+| `SYNC_CANDIDATE_DISCOVERY_ENABLED` | `true` | Enable candidate discovery commands |
+| `SYNC_WEBPAGE_MIN_CONTENT_CHARS` | `100` | Minimum extracted webpage content target |
 
 ## Storage Roles
 
@@ -622,6 +652,273 @@ Every query response includes the disclaimer:
 ```text
 This information is based on retrieved official Swiss sources and is provided for informational purposes only. It does not constitute legal advice.
 ```
+
+## Official Source Synchronizer
+
+Phase 9 keeps the official knowledge base current through a controlled synchronizer. Automatic refresh does not mean unrestricted crawling.
+
+- Approved sources are refreshed automatically.
+- New sources are only discovered into a review queue.
+- Discovered candidates must be approved before indexing.
+- Only official Swiss government domains from the centralized allowlist are accepted.
+
+Current Phase 9 architecture:
+
+```text
+Official approved sources
+↓
+Synchronizer
+├── Conditional HTTP checks
+├── Change detection
+├── PDF and webpage processors
+├── Candidate discovery
+└── Synchronization audit records
+↓
+Incremental ingestion
+↓
+ChromaDB
+↓
+FastAPI orchestration
+↓
+Grounded answers
+```
+
+### Supported Regions
+
+The synchronizer supports `federal` plus all 26 Swiss cantons:
+
+```text
+ag ai ar be bl bs fr ge gl gr ju lu ne nw ow sg sh so sz tg ti ur vd vs zg zh
+```
+
+Region names and approved government domains live centrally in `backend/synchronizer/regions.py`. Domain rules are not scattered across the codebase.
+
+### Source Registry
+
+Curated static sources live in:
+
+```text
+data/pdfs/metadata/sources.yaml
+```
+
+Schema:
+
+```yaml
+version: 1
+sources:
+  - id: sem_family_reunification
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - family_reunification
+    source_type: pdf
+    url: https://www.sem.admin.ch/...
+    language: en
+    local_filename: family_reunification.pdf
+    discovery_enabled: false
+    title: Optional title
+    expected_content_type: application/pdf
+    css_content_selector: main
+    css_link_selector: a
+    include_url_patterns: []
+    exclude_url_patterns: []
+    notes: Optional notes
+    priority: 10
+    expected_update_frequency: weekly
+    replacement_group: family_reunification_federal
+    metadata: {}
+```
+
+Remote `pdf`, `webpage`, and `landing_page` entries must use HTTPS and pass the region/domain allowlist. Existing manually collected PDFs are preserved as disabled `local_only` seed entries with `local://` URLs and TODO notes instead of fabricated official URLs.
+
+### Approved Domain Policy
+
+The synchronizer rejects:
+
+- non-HTTPS remote sources
+- redirects that leave the approved allowlist
+- blogs, law firms, news sites, social media, private mirrors, shorteners, and arbitrary storage
+- path traversal or unsafe local filenames
+
+Final URLs are validated after redirects.
+
+### Database Schema
+
+Phase 9 adds these SQLite tables through Alembic migration `0002_phase_9_synchronizer`:
+
+- `synchronized_sources`: source status, canonical URL, local path, ETag, Last-Modified, SHA-256, document id, failures, timestamps.
+- `synchronization_runs`: run status, scope, checked/updated/unchanged/failed counts, discovered candidate count.
+- `synchronization_events`: per-source audit events such as `check_started`, `unchanged`, `validated`, `indexed`, `updated`, `failed`, `unavailable`, and candidate review events.
+- `source_candidates`: discovered official-looking links awaiting approval, with candidate status `pending`, `approved`, `rejected`, `duplicate`, or `invalid`.
+
+Run migrations:
+
+```bash
+.venv/bin/alembic upgrade head
+```
+
+### Change Detection
+
+Change detection uses this order:
+
+```text
+HTTP 304
+↓
+ETag comparison
+↓
+Last-Modified comparison
+↓
+SHA-256 comparison
+```
+
+SHA-256 is the final source of truth. A changed `Last-Modified` header alone is not enough to force reindexing when the content hash is unchanged.
+
+### PDF Synchronization
+
+For approved PDFs:
+
+```text
+conditional HTTP request
+↓
+temporary download
+↓
+content-type, PDF signature, and PyMuPDF validation
+↓
+SHA-256
+↓
+Phase 1 extraction and chunking
+↓
+embeddings
+↓
+ChromaDB replace_document(document_id, chunks)
+↓
+move validated PDF into data/pdfs/<region>/
+↓
+record sync metadata and events
+```
+
+The old local file and old ChromaDB chunks are retained if validation, embedding, or replacement fails.
+
+### Webpage Synchronization
+
+For approved webpages, the synchronizer extracts primary visible content, removes boilerplate such as navigation, headers, footers, cookie text, scripts, and styles, preserves headings, paragraphs, lists, tables, and visible link labels where feasible, then saves a normalized JSON document under:
+
+```text
+data/documents/<region>/<source_id>.json
+```
+
+Every synchronized chunk includes provenance metadata:
+
+```text
+document_id
+source_id
+source
+official_url
+region
+authority
+language
+procedure_types
+page or section
+content_sha256
+synchronized_at
+source_type
+```
+
+### Incremental Reindexing
+
+`ChromaChunkStore.replace_document(...)` replaces only chunks for a changed `document_id`.
+
+New chunks are embedded before old chunks are deleted. If insertion fails, the old chunks remain active. The synchronizer does not rebuild the entire ChromaDB collection for one updated document.
+
+### Candidate Discovery
+
+Discovery runs only from approved landing pages or sources with `discovery_enabled: true`.
+
+It:
+
+- extracts links
+- resolves relative URLs
+- canonicalizes URLs
+- rejects links outside approved domains
+- applies include/exclude patterns
+- ignores obvious assets
+- infers procedure types from deterministic keywords
+- deduplicates candidates
+- stores candidates in `source_candidates`
+
+Candidates are never indexed automatically.
+
+### CLI
+
+```bash
+python -m backend.synchronizer.cli validate
+python -m backend.synchronizer.cli sync --all
+python -m backend.synchronizer.cli sync --region zh
+python -m backend.synchronizer.cli sync --source sem_family_reunification
+python -m backend.synchronizer.cli discover --all
+python -m backend.synchronizer.cli discover --region vd
+python -m backend.synchronizer.cli status
+python -m backend.synchronizer.cli candidates list
+python -m backend.synchronizer.cli candidates approve <candidate_id>
+python -m backend.synchronizer.cli candidates reject <candidate_id> --note "Irrelevant report"
+python -m backend.synchronizer.cli cleanup --dry-run
+```
+
+Example synchronization report:
+
+```json
+{
+  "run_id": "8e3f...",
+  "requested_scope": "all",
+  "status": "completed",
+  "checked_count": 2,
+  "unchanged_count": 1,
+  "updated_count": 1,
+  "failed_count": 0,
+  "discovered_candidate_count": 0,
+  "events": ["zh_driving: updated", "sem_family: unchanged"]
+}
+```
+
+### Admin Endpoints
+
+Development/admin synchronization endpoints are available only when:
+
+```text
+ENABLE_SYNC_ADMIN_ENDPOINTS=true
+```
+
+Exposed endpoints:
+
+- `POST /v1/admin/synchronization/run`
+- `GET /v1/admin/synchronization/status`
+- `GET /v1/admin/synchronization/runs`
+- `GET /v1/admin/synchronization/candidates`
+- `POST /v1/admin/synchronization/candidates/{candidate_id}/approve`
+- `POST /v1/admin/synchronization/candidates/{candidate_id}/reject`
+
+These must not be publicly exposed without authentication. The CLI remains the preferred local control interface.
+
+### Scheduling Preparation
+
+Phase 9 does not embed a scheduler inside FastAPI. External schedulers can call deterministic commands:
+
+```bash
+python -m backend.synchronizer.cli sync --all
+python -m backend.synchronizer.cli discover --all
+```
+
+Suggested cadence:
+
+- approved-source refresh: weekly
+- candidate discovery: monthly
+
+Future scheduling can be handled by cron, GitHub Actions, Azure DevOps, or another external scheduler.
+
+### Recovery Behavior
+
+When a source returns `404` or `410`, it is marked unavailable, a failure/event is recorded, and the last successfully indexed version is retained. The synchronizer does not delete local files or ChromaDB chunks because a government website may be temporarily restructured.
 
 ## Test Retrieval
 

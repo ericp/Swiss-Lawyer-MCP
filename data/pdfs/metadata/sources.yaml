@@ -1,0 +1,133 @@
+version: 1
+sources:
+  - id: seed_federal_b_permit_gainful_activity
+    enabled: false
+    region: federal
+    authority: Swiss Confederation
+    procedure_types:
+      - residence_permit
+      - work_permit
+    source_type: local_only
+    url: local://data/pdfs/federal/b_permit_gainful_activity.pdf
+    language: unknown
+    local_filename: b_permit_gainful_activity.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_b_permit_sem
+    enabled: false
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - residence_permit
+    source_type: local_only
+    url: local://data/pdfs/federal/b_permit_sem.pdf
+    language: unknown
+    local_filename: b_permit_sem.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_citizenship_overview
+    enabled: false
+    region: federal
+    authority: Swiss Confederation
+    procedure_types:
+      - citizenship
+    source_type: local_only
+    url: local://data/pdfs/federal/citizenship_overview.pdf
+    language: unknown
+    local_filename: citizenship_overview.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_family_reunification
+    enabled: false
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - family_reunification
+    source_type: local_only
+    url: local://data/pdfs/federal/family_reunification.pdf
+    language: unknown
+    local_filename: family_reunification.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_free_movement_eu_efta
+    enabled: false
+    region: federal
+    authority: Swiss Confederation
+    procedure_types:
+      - immigration
+      - residence_permit
+      - work_permit
+    source_type: local_only
+    url: local://data/pdfs/federal/free_movement_eu_efta.pdf
+    language: unknown
+    local_filename: free_movement_eu_efta.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_residence_permits_overview
+    enabled: false
+    region: federal
+    authority: Swiss Confederation
+    procedure_types:
+      - residence_permit
+      - immigration
+    source_type: local_only
+    url: local://data/pdfs/federal/residence_permits_overview.pdf
+    language: unknown
+    local_filename: residence_permits_overview.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_federal_without_gainful_activity
+    enabled: false
+    region: federal
+    authority: Swiss Confederation
+    procedure_types:
+      - residence_permit
+      - immigration
+    source_type: local_only
+    url: local://data/pdfs/federal/without_gainful_activity.pdf
+    language: unknown
+    local_filename: without_gainful_activity.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_zh_driving_licence_exchange
+    enabled: false
+    region: zh
+    authority: Canton of Zurich
+    procedure_types:
+      - driving_licence_exchange
+    source_type: local_only
+    url: local://data/pdfs/zh/driving_licence_exchange_zh.pdf
+    language: unknown
+    local_filename: driving_licence_exchange_zh.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
+  - id: seed_zh_registration_zurich
+    enabled: false
+    region: zh
+    authority: Canton of Zurich
+    procedure_types:
+      - municipality_registration
+    source_type: local_only
+    url: local://data/pdfs/zh/registration_zurich.pdf
+    language: unknown
+    local_filename: registration_zurich.pdf
+    discovery_enabled: false
+    notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
+    metadata:
+      manually_seeded: true
