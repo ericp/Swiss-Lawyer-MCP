@@ -14,6 +14,7 @@ from backend.clarification.clarification_engine import ClarificationEngine
 from backend.clarification.intent_classifier import IntentClassifier
 from backend.generation.answer_generator import GroundedAnswerGenerator
 from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.vector_store import ChromaChunkStore
 from backend.location.canton_resolver import CantonResolver
 from backend.memory.database import (
     create_memory_engine,
@@ -26,13 +27,17 @@ from backend.reranking.reranker import CrossEncoderReranker
 from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
 from backend.retrieval.vector import VectorRetriever
+from backend.synchronizer.http_client import SyncHttpClient
+from backend.synchronizer.synchronizer_service import SourceSynchronizer
 from backend.utils.config import (
     APISettings,
     GenerationSettings,
     RetrievalSettings,
+    SynchronizerSettings,
     load_api_settings,
     load_generation_settings,
     load_retrieval_settings,
+    load_synchronizer_settings,
 )
 
 
@@ -55,6 +60,13 @@ def get_generation_settings() -> GenerationSettings:
     """Return cached generation settings."""
 
     return load_generation_settings()
+
+
+@lru_cache
+def get_synchronizer_settings() -> SynchronizerSettings:
+    """Return cached synchronizer settings."""
+
+    return load_synchronizer_settings()
 
 
 @lru_cache
@@ -131,6 +143,38 @@ def get_workflow_planner() -> WorkflowPlanner:
     return WorkflowPlanner(
         api_key=settings.openai_api_key,
         model=settings.planner_model,
+    )
+
+
+@lru_cache
+def get_sync_http_client() -> SyncHttpClient:
+    settings = get_synchronizer_settings()
+    return SyncHttpClient(
+        timeout_seconds=settings.http_timeout_seconds,
+        retry_count=settings.retry_count,
+        retry_backoff_seconds=settings.retry_backoff_seconds,
+        user_agent=settings.user_agent,
+        max_response_bytes=settings.max_document_bytes,
+    )
+
+
+def get_source_synchronizer() -> SourceSynchronizer:
+    settings = get_synchronizer_settings()
+    embedder = (
+        OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
+        if settings.openai_api_key
+        else None
+    )
+    chunk_store = ChromaChunkStore(
+        path=settings.chroma_path,
+        collection_name=settings.collection_name,
+    )
+    return SourceSynchronizer(
+        settings=settings,
+        session_factory=get_session_factory(),
+        http_client=get_sync_http_client(),
+        chunk_store=chunk_store,
+        embedder=embedder,
     )
 
 

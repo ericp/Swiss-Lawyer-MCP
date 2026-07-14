@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChunkMetadata(BaseModel):
     """Traceability metadata for a chunk stored in ChromaDB."""
+
+    model_config = ConfigDict(extra="allow")
 
     source: str = Field(min_length=1)
     region: str = Field(min_length=1)
