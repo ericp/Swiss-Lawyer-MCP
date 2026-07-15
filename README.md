@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, and **Phase 9: official source synchronization**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, or RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, and **Phase 10 Part 1: evaluation module architecture**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, final evaluation metrics, regression thresholds, or RAGAS evaluation.
 
 ## Safety Scope
 
@@ -141,8 +141,28 @@ Swiss Lawyer MCP/
 │       └── .gitkeep
 ├── docs/
 ├── evaluation/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── models.py
+│   ├── runner.py
+│   ├── adapters/
+│   │   ├── __init__.py
+│   │   ├── clarification_adapter.py
+│   │   ├── common.py
+│   │   ├── end_to_end_adapter.py
+│   │   ├── generation_adapter.py
+│   │   ├── planner_adapter.py
+│   │   ├── reranking_adapter.py
+│   │   └── retrieval_adapter.py
+│   ├── artifacts/
+│   ├── baselines/
+│   ├── datasets/
+│   ├── metrics/
+│   └── reports/
 ├── notebooks/
 └── tests/
+    ├── evaluation/
+    │   └── test_evaluation_module.py
     ├── test_answer_generator.py
     ├── test_bm25_retrieval.py
     ├── test_clarification_engine.py
@@ -170,7 +190,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 9 official source synchronization are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 10 Part 1 evaluation architecture are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -919,6 +939,82 @@ Future scheduling can be handled by cron, GitHub Actions, Azure DevOps, or anoth
 ### Recovery Behavior
 
 When a source returns `404` or `410`, it is marked unavailable, a failure/event is recorded, and the last successfully indexed version is retained. The synchronizer does not delete local files or ChromaDB chunks because a government website may be temporarily restructured.
+
+## Evaluation Module
+
+Phase 10 Part 1 adds a reusable evaluation architecture. It does not add final metric calculations, regression thresholds, before/after reports, or production RAG behavior changes yet.
+
+The evaluation module is separate from production code under `evaluation/`. It can inspect stages independently:
+
+- intent classification
+- clarification-question generation
+- vector retrieval
+- BM25 retrieval
+- hybrid retrieval
+- reranking
+- grounded-answer generation
+- source citation
+- procedure-plan generation
+- insufficient-context and abstention behavior
+- complete end-to-end execution
+
+### Offline vs Live
+
+Offline mode is the default. It uses stored or mocked outputs and must not call OpenAI or live retrieval/model services unless those dependencies are explicitly injected for a test.
+
+Live mode must be selected explicitly:
+
+```python
+EvaluationConfig(execution_mode="live")
+```
+
+Live mode is where configured OpenAI models and the local retrieval system can be evaluated later. Phase 10 Part 1 only creates the architecture and safety boundaries.
+
+### Adapters
+
+Evaluation adapters are thin wrappers around existing production services:
+
+- `ClarificationEvaluationAdapter`: runs Phase 4 intent classification and clarification.
+- `RetrievalEvaluationAdapter`: runs vector, BM25, and hybrid retrieval independently.
+- `RerankingEvaluationAdapter`: runs the Phase 3 reranker over supplied candidates.
+- `GenerationEvaluationAdapter`: runs Phase 5 generation in live mode or returns precomputed offline answers.
+- `PlannerEvaluationAdapter`: runs Phase 6 planning in live mode or returns precomputed offline plans.
+- `EndToEndEvaluationAdapter`: runs the Phase 8 orchestrator through an isolated dependency supplied to evaluation.
+
+The adapters normalize production outputs into `EvaluationCaseResult` without changing production behavior.
+
+### Evaluation Artifacts
+
+Each run writes raw artifacts to:
+
+```text
+evaluation/artifacts/<run_id>/
+├── run_metadata.json
+├── config.json
+├── case_results.jsonl
+├── warnings.json
+├── errors.json
+└── intermediate_outputs/
+```
+
+Generated artifacts are ignored by Git by default. The committed `.gitkeep` only preserves the directory.
+
+### Data Isolation
+
+Evaluation runs must not use real user conversations or private data. They must not modify production SQLite or ChromaDB data. Where persistence is needed, tests and future live evaluation should use temporary SQLite/ChromaDB paths or explicitly injected isolated services.
+
+Run metadata records reproducibility details such as:
+
+- run id and run name
+- dataset name and version
+- execution mode
+- timestamp
+- Git commit when available
+- Python and dependency versions
+- evaluation configuration
+- retrieval limits and random seed
+
+This prepares the project for Phase 10 Part 2 datasets and later metric/reporting phases.
 
 ## Test Retrieval
 
