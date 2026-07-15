@@ -12,3 +12,6 @@ data/chromadb/*
 !data/chromadb/.gitkeep
 data/sqlite/*
 !data/sqlite/.gitkeep
+
+evaluation/artifacts/*
+!evaluation/artifacts/.gitkeep
