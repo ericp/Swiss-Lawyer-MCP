@@ -1,0 +1,7 @@
+{
+  "fixture_id": "synthetic_contexts/plan-004_answer.json",
+  "summary": "Synthetic paraphrased fixture for offline evaluation.",
+  "source_ids": [
+    "seed_zh_registration_zurich"
+  ]
+}

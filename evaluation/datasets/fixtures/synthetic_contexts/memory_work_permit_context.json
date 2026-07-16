@@ -1,0 +1,7 @@
+{
+  "active_procedure": {
+    "intent": "work_permit",
+    "current_step": 1,
+    "status": "in_progress"
+  }
+}
