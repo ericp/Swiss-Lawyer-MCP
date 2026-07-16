@@ -1,0 +1,7 @@
+{
+  "fixture_id": "synthetic_contexts/gen-004_context.json",
+  "summary": "Synthetic paraphrased fixture for offline evaluation.",
+  "source_ids": [
+    "seed_federal_without_gainful_activity"
+  ]
+}

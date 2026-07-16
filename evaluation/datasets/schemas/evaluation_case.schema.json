@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Swiss Lawyer MCP Evaluation JSONL Record",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "record_type",
+        "name",
+        "version",
+        "created_at",
+        "description",
+        "source_registry_version",
+        "applicable_knowledge_base_version",
+        "authoring_notes"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "source_registry_version": {
+          "type": "string"
+        },
+        "applicable_knowledge_base_version": {
+          "type": "string"
+        },
+        "authoring_notes": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "record_type",
+        "id",
+        "question"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "case"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "user_profile": {
+          "type": "object"
+        },
+        "expected_intent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_clarification_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "forbidden_clarification_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_document_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_regions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_chunk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relevance_judgments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "expected_answer_facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "fact_id",
+              "description",
+              "importance"
+            ],
+            "properties": {
+              "fact_id": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "importance": {
+                "type": "string"
+              },
+              "required_source_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "forbidden_answer_facts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "expected_procedure_steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_required_document_concepts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "forbidden_procedure_steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_missing_information": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage_status": {
+          "enum": [
+            "supported",
+            "insufficient_context",
+            "future_coverage",
+            "synchronizer_coverage"
+          ]
+        },
+        "retrieved_context_fixture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grounded_answer_fixture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memory_context_fixture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "should_abstain": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offline_outputs": {
+          "type": "object"
+        }
+      }
+    }
+  ]
+}

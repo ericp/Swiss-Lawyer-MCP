@@ -33,12 +33,23 @@ class EvaluationCase(BaseModel):
     expected_intent: str | None = None
     expected_clarification_fields: list[str] = Field(default_factory=list)
     expected_clarification_questions: list[str] = Field(default_factory=list)
+    forbidden_clarification_fields: list[str] = Field(default_factory=list)
     expected_document_ids: list[str] = Field(default_factory=list)
     expected_source_ids: list[str] = Field(default_factory=list)
     expected_regions: list[str] = Field(default_factory=list)
-    expected_answer_facts: list[str] = Field(default_factory=list)
-    forbidden_answer_facts: list[str] = Field(default_factory=list)
+    expected_chunk_ids: list[str] = Field(default_factory=list)
+    relevance_judgments: dict[str, int] = Field(default_factory=dict)
+    expected_answer_facts: list[dict[str, Any]] = Field(default_factory=list)
+    forbidden_answer_facts: list[dict[str, Any]] = Field(default_factory=list)
     expected_procedure_steps: list[str] = Field(default_factory=list)
+    expected_required_document_concepts: list[str] = Field(default_factory=list)
+    expected_status: str | None = None
+    forbidden_procedure_steps: list[str] = Field(default_factory=list)
+    expected_missing_information: list[str] = Field(default_factory=list)
+    coverage_status: str = "supported"
+    retrieved_context_fixture: str | None = None
+    grounded_answer_fixture: str | None = None
+    memory_context_fixture: str | None = None
     should_abstain: bool = False
     notes: str | None = None
     offline_outputs: dict[str, Any] = Field(default_factory=dict)

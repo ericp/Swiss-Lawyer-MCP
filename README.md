@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, and **Phase 10 Part 1: evaluation module architecture**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, final evaluation metrics, regression thresholds, or RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, and **Phase 10 Part 2: versioned evaluation datasets**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, final evaluation metrics, regression thresholds, or RAGAS evaluation.
 
 ## Safety Scope
 
@@ -157,11 +157,31 @@ Swiss Lawyer MCP/
 │   ├── artifacts/
 │   ├── baselines/
 │   ├── datasets/
+│   │   ├── README.md
+│   │   ├── __init__.py
+│   │   ├── loader.py
+│   │   ├── validator.py
+│   │   ├── schemas/
+│   │   │   └── evaluation_case.schema.json
+│   │   ├── smoke/
+│   │   │   └── v1.jsonl
+│   │   ├── clarification/
+│   │   │   └── v1.jsonl
+│   │   ├── retrieval/
+│   │   │   └── v1.jsonl
+│   │   ├── generation/
+│   │   │   └── v1.jsonl
+│   │   ├── planning/
+│   │   │   └── v1.jsonl
+│   │   ├── end_to_end/
+│   │   │   └── v1.jsonl
+│   │   └── fixtures/
 │   ├── metrics/
 │   └── reports/
 ├── notebooks/
 └── tests/
     ├── evaluation/
+    │   ├── test_datasets.py
     │   └── test_evaluation_module.py
     ├── test_answer_generator.py
     ├── test_bm25_retrieval.py
@@ -190,7 +210,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 10 Part 1 evaluation architecture are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 10 Part 2 versioned evaluation datasets are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -1015,6 +1035,61 @@ Run metadata records reproducibility details such as:
 - retrieval limits and random seed
 
 This prepares the project for Phase 10 Part 2 datasets and later metric/reporting phases.
+
+## Evaluation Datasets
+
+Phase 10 Part 2 adds versioned JSONL datasets under:
+
+```text
+evaluation/datasets/
+```
+
+Dataset groups:
+
+- `smoke/v1.jsonl`: 10 representative cases for quick runner checks.
+- `clarification/v1.jsonl`: 20 cases for intent and missing-field behavior.
+- `retrieval/v1.jsonl`: 25 cases for federal, Zurich canton, keyword, semantic, multilingual, and unsupported retrieval.
+- `generation/v1.jsonl`: 15 cases using synthetic retrieved-context fixtures and fact-level expectations.
+- `planning/v1.jsonl`: 10 cases for workflow concepts, statuses, documents, and unsupported-invention checks.
+- `end_to_end/v1.jsonl`: 15 realistic scenarios covering non-EU/EFTA, EU/EFTA, UK, Swiss permit holders, memory continuation, unsupported topics, ambiguous cities, and insufficient context.
+
+Every JSONL file starts with a metadata record containing:
+
+```text
+name
+version
+created_at
+description
+source_registry_version
+applicable_knowledge_base_version
+authoring_notes
+```
+
+Cases use structured expectations instead of exact answer strings. Expected and forbidden answer facts are paraphrased records with `fact_id`, `description`, `importance`, and optional `required_source_ids`.
+
+Retrieval cases support graded relevance:
+
+```text
+0 = irrelevant
+1 = partially relevant
+2 = relevant
+3 = highly relevant
+```
+
+Coverage status distinguishes:
+
+- `supported`: current seed documents should support the case.
+- `insufficient_context`: the correct behavior is to abstain or say context is insufficient.
+- `future_coverage`: supported by architecture but not current indexed seed evidence.
+- `synchronizer_coverage`: expected to become supported after approved source synchronization.
+
+Validate datasets:
+
+```bash
+python -m evaluation.datasets.validator
+```
+
+Do not silently modify an existing dataset version when expectations materially change. Create a new file such as `v2.jsonl` and update its metadata.
 
 ## Test Retrieval
 
