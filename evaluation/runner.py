@@ -18,6 +18,8 @@ from evaluation.adapters.planner_adapter import PlannerEvaluationAdapter
 from evaluation.adapters.reranking_adapter import RerankingEvaluationAdapter
 from evaluation.adapters.retrieval_adapter import RetrievalEvaluationAdapter
 from evaluation.config import EvaluationConfig
+from evaluation.datasets.loader import load_jsonl_dataset
+from evaluation.metrics.aggregate import compute_run_metrics
 from evaluation.models import (
     EvaluationCase,
     EvaluationCaseResult,
@@ -67,8 +69,9 @@ class EvaluationRunner:
         warnings: list[str] = []
         errors: list[str] = []
         case_results: list[EvaluationCaseResult] = []
+        selected_cases = self._select_cases(self._load_cases())
 
-        for case in self._select_cases(self._load_cases()):
+        for case in selected_cases:
             try:
                 case_results.append(self._run_case(case))
             except Exception as error:
@@ -84,16 +87,27 @@ class EvaluationRunner:
                     break
 
         metadata.completed_at = datetime.now(timezone.utc)
+        metric_payload = compute_run_metrics(selected_cases, case_results, config=self.config)
+        for result in case_results:
+            result.metrics = metric_payload["case_level_metrics"].get(result.case_id, [])
         run_result = EvaluationRunResult(
             metadata=metadata,
             case_results=case_results,
+            case_level_metrics=metric_payload["case_level_metrics"],
             aggregate_metrics={
-                "case_count": len(case_results),
-                "failed_count": sum(
-                    result.execution_status is EvaluationStatus.FAILED
-                    for result in case_results
-                ),
+                **metric_payload["aggregate_metrics"],
+                "execution": {
+                    "case_count": len(case_results),
+                    "failed_count": sum(
+                        result.execution_status is EvaluationStatus.FAILED
+                        for result in case_results
+                    ),
+                },
             },
+            metric_applicability_counts=metric_payload["metric_applicability_counts"],
+            metric_warnings=metric_payload["metric_warnings"],
+            judge_metadata=metric_payload["judge_metadata"],
+            timing_summary=metric_payload["timing_summary"],
             warnings=warnings,
             errors=errors,
         )
@@ -120,7 +134,7 @@ class EvaluationRunner:
 
         reranking = self._reranking_adapter.evaluate(
             case,
-            hybrid_candidates=case.offline_outputs.get("hybrid_candidates", []),
+            hybrid_candidates=case.offline_outputs.get("hybrid_candidates", result.hybrid_results),
             top_k=self.config.rerank_top_k,
         )
         result.reranked_results = reranking.reranked_results
@@ -160,11 +174,7 @@ class EvaluationRunner:
             return []
         text = self.config.dataset_path.read_text(encoding="utf-8")
         if self.config.dataset_path.suffix == ".jsonl":
-            return [
-                EvaluationCase.model_validate(json.loads(line))
-                for line in text.splitlines()
-                if line.strip()
-            ]
+            return load_jsonl_dataset(self.config.dataset_path).cases
         payload = json.loads(text)
         items = payload.get("cases", payload) if isinstance(payload, dict) else payload
         return [EvaluationCase.model_validate(item) for item in items]
@@ -229,6 +239,26 @@ class EvaluationRunner:
                     json.dumps(normalize(result.intermediate_outputs), indent=2),
                     encoding="utf-8",
                 )
+        (run_dir / "metrics.json").write_text(
+            json.dumps(
+                {
+                    "aggregate_metrics": normalize(run_result.aggregate_metrics),
+                    "metric_applicability_counts": normalize(run_result.metric_applicability_counts),
+                    "metric_warnings": run_result.metric_warnings,
+                    "judge_metadata": normalize(run_result.judge_metadata),
+                    "timing_summary": normalize(run_result.timing_summary),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with (run_dir / "case_metrics.jsonl").open("w", encoding="utf-8") as file:
+            for case_id, metrics in run_result.case_level_metrics.items():
+                file.write(json.dumps({"case_id": case_id, "metrics": normalize(metrics)}) + "\n")
+        (run_dir / "aggregate_metrics.json").write_text(
+            json.dumps(normalize(run_result.aggregate_metrics), indent=2),
+            encoding="utf-8",
+        )
 
 
 def _git_commit() -> str | None:
