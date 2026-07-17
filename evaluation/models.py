@@ -74,6 +74,7 @@ class EvaluationCaseResult(BaseModel):
     timings: dict[str, float] = Field(default_factory=dict)
     model_metadata: dict[str, Any] = Field(default_factory=dict)
     intermediate_outputs: dict[str, Any] = Field(default_factory=dict)
+    metrics: list[Any] = Field(default_factory=list)
 
 
 class EvaluationRunMetadata(BaseModel):
@@ -100,6 +101,11 @@ class EvaluationRunResult(BaseModel):
 
     metadata: EvaluationRunMetadata
     case_results: list[EvaluationCaseResult]
+    case_level_metrics: dict[str, list[Any]] = Field(default_factory=dict)
     aggregate_metrics: dict[str, Any] = Field(default_factory=dict)
+    metric_applicability_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+    metric_warnings: list[str] = Field(default_factory=list)
+    judge_metadata: dict[str, Any] = Field(default_factory=dict)
+    timing_summary: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

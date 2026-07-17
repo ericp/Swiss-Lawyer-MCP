@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, and **Phase 10 Part 2: versioned evaluation datasets**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, final evaluation metrics, regression thresholds, or RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, and **Phase 10 Part 3: automated evaluation metrics**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, regression thresholds, before/after comparison reports, or mandatory RAGAS evaluation.
 
 ## Safety Scope
 
@@ -177,12 +177,25 @@ Swiss Lawyer MCP/
 │   │   │   └── v1.jsonl
 │   │   └── fixtures/
 │   ├── metrics/
+│   │   ├── __init__.py
+│   │   ├── abstention.py
+│   │   ├── aggregate.py
+│   │   ├── base.py
+│   │   ├── citations.py
+│   │   ├── clarification.py
+│   │   ├── generation.py
+│   │   ├── latency.py
+│   │   ├── optional_ragas.py
+│   │   ├── planning.py
+│   │   ├── reranking.py
+│   │   └── retrieval.py
 │   └── reports/
 ├── notebooks/
 └── tests/
     ├── evaluation/
     │   ├── test_datasets.py
-    │   └── test_evaluation_module.py
+    │   ├── test_evaluation_module.py
+    │   └── test_metrics.py
     ├── test_answer_generator.py
     ├── test_bm25_retrieval.py
     ├── test_clarification_engine.py
@@ -210,7 +223,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 10 Part 2 versioned evaluation datasets are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 10 Part 3 automated evaluation metrics are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -962,7 +975,7 @@ When a source returns `404` or `410`, it is marked unavailable, a failure/event 
 
 ## Evaluation Module
 
-Phase 10 Part 1 adds a reusable evaluation architecture. It does not add final metric calculations, regression thresholds, before/after reports, or production RAG behavior changes yet.
+Phase 10 Part 1 adds a reusable evaluation architecture, Part 2 adds versioned datasets, and Part 3 adds automated metric calculations. Regression thresholds, before/after reports, and production RAG behavior changes are still intentionally out of scope.
 
 The evaluation module is separate from production code under `evaluation/`. It can inspect stages independently:
 
@@ -1012,6 +1025,9 @@ evaluation/artifacts/<run_id>/
 ├── run_metadata.json
 ├── config.json
 ├── case_results.jsonl
+├── case_metrics.jsonl
+├── metrics.json
+├── aggregate_metrics.json
 ├── warnings.json
 ├── errors.json
 └── intermediate_outputs/
@@ -1034,7 +1050,26 @@ Run metadata records reproducibility details such as:
 - evaluation configuration
 - retrieval limits and random seed
 
-This prepares the project for Phase 10 Part 2 datasets and later metric/reporting phases.
+This prepares the project for regression thresholds and before/after reporting in later Phase 10 work.
+
+### Automated Metrics
+
+Phase 10 Part 3 keeps metrics separated by pipeline responsibility instead of collapsing everything into one score:
+
+- clarification: intent accuracy, missing-field precision/recall/F1, forbidden-question rate, and completion accuracy.
+- retrieval: Recall@K, Precision@K, MRR, MAP, nDCG@K, source coverage, region accuracy, and duplicate rate for vector, BM25, hybrid, and reranked result sets.
+- reranking: retained recall, MRR, nDCG, rank improvement, and relevant-evidence drop rate.
+- generation: required-fact coverage, forbidden-fact rate, grounded-claim coverage, unsupported-claim rate, answer completeness, and insufficient-context accuracy.
+- citations: citation presence, citation coverage, source accuracy, support accuracy, metadata completeness, and fabricated-citation rate.
+- abstention: abstention precision/recall, unsafe-answer rate, and unnecessary-abstention rate.
+- planning: expected-step coverage, invented-step rate, required-document coverage, invented-document rate, workflow-status accuracy, and unknown-fallback accuracy.
+- latency and operations: stage timings, call counts when available, token usage when available, error rate, and completion rate.
+
+Most metrics are deterministic and use structured dataset expectations such as source IDs, relevance judgments, missing fields, expected facts, forbidden facts, and expected workflow statuses. Model-judged or semantic scoring can be added later, but it is not the only source of truth.
+
+Optional RAGAS integration lives behind `evaluation.metrics.optional_ragas`. If RAGAS is not installed or is incompatible, the optional metric reports itself as non-applicable with a warning and does not fail the run. The custom project metrics remain primary.
+
+Aggregate metrics are grouped by metric, category, intent, region, language, nationality category, execution mode, and tags. Non-applicable values are not averaged, and every aggregate includes sample counts so sparse measurements are visible.
 
 ## Evaluation Datasets
 
