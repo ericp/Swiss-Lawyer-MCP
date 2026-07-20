@@ -1,0 +1,26 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "bm25_recall_at_k_10": {"mean": 0.7, "sample_count": 25},
+      "hybrid_recall_at_k_10": {"mean": 0.82, "sample_count": 25},
+      "rerank_recall_at_k_5": {"mean": 0.75, "sample_count": 20},
+      "source_coverage": {"mean": 0.8, "sample_count": 25},
+      "vector_recall_at_k_10": {"mean": 0.72, "sample_count": 25}
+    }
+  },
+  "approved_notes": "Initial retrieval baseline summary. Contains no raw model output.",
+  "baseline_id": "retrieval_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "retrieval",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {},
+  "prompt_hashes": {},
+  "selected_critical_case_results": {},
+  "source_registry_version": "1"
+}

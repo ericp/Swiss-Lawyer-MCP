@@ -27,6 +27,7 @@ class EvaluationCase(BaseModel):
 
     id: str = Field(min_length=1)
     question: str = Field(min_length=1)
+    critical: bool = False
     language: str | None = None
     tags: list[str] = Field(default_factory=list)
     user_profile: dict[str, Any] = Field(default_factory=dict)

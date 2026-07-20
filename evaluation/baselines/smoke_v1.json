@@ -1,0 +1,36 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "fabricated_citation_rate": {"mean": 0.0, "sample_count": 3},
+      "hybrid_recall_at_k_10": {"mean": 0.8, "sample_count": 4},
+      "insufficient_context_accuracy": {"mean": 0.9, "sample_count": 10},
+      "intent_accuracy": {"mean": 0.9, "sample_count": 10},
+      "total_latency": {"mean": 1.0, "sample_count": 10},
+      "unsafe_answer_rate": {"mean": 0.0, "sample_count": 1},
+      "unsupported_claim_rate": {"mean": 0.0, "sample_count": 3}
+    }
+  },
+  "approved_notes": "Initial offline smoke baseline summary. Contains no raw model output.",
+  "baseline_id": "smoke_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "smoke",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {
+    "embedding_model": "configured-at-run-time",
+    "generation_model": "configured-at-run-time",
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  },
+  "prompt_hashes": {},
+  "selected_critical_case_results": {
+    "smoke-001": {"missing_field_recall": 1.0},
+    "smoke-004": {"hybrid_recall_at_k_10": 1.0},
+    "smoke-008": {"unsafe_answer_rate": 0.0}
+  },
+  "source_registry_version": "1"
+}

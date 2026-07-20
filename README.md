@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, and **Phase 10 Part 3: automated evaluation metrics**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, regression thresholds, before/after comparison reports, or mandatory RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, and **Phase 10 Part 4: automated quality regression tests**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, the final comparison CLI/formatted report, or mandatory RAGAS evaluation.
 
 ## Safety Scope
 
@@ -156,6 +156,13 @@ Swiss Lawyer MCP/
 │   │   └── retrieval_adapter.py
 │   ├── artifacts/
 │   ├── baselines/
+│   │   ├── README.md
+│   │   ├── clarification_v1.json
+│   │   ├── end_to_end_v1.json
+│   │   ├── generation_v1.json
+│   │   ├── planning_v1.json
+│   │   ├── retrieval_v1.json
+│   │   └── smoke_v1.json
 │   ├── datasets/
 │   │   ├── README.md
 │   │   ├── __init__.py
@@ -189,6 +196,15 @@ Swiss Lawyer MCP/
 │   │   ├── planning.py
 │   │   ├── reranking.py
 │   │   └── retrieval.py
+│   ├── regression/
+│   │   ├── __init__.py
+│   │   ├── baseline_service.py
+│   │   ├── baselines.py
+│   │   ├── checker.py
+│   │   ├── fingerprint.py
+│   │   ├── models.py
+│   │   ├── thresholds.py
+│   │   └── thresholds.yaml
 │   └── reports/
 ├── notebooks/
 └── tests/
@@ -196,6 +212,15 @@ Swiss Lawyer MCP/
     │   ├── test_datasets.py
     │   ├── test_evaluation_module.py
     │   └── test_metrics.py
+    ├── regression/
+    │   ├── conftest.py
+    │   ├── helpers.py
+    │   ├── test_citation_quality.py
+    │   ├── test_clarification_quality.py
+    │   ├── test_generation_safety.py
+    │   ├── test_planner_quality.py
+    │   ├── test_retrieval_quality.py
+    │   └── test_smoke_quality.py
     ├── test_answer_generator.py
     ├── test_bm25_retrieval.py
     ├── test_clarification_engine.py
@@ -223,7 +248,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 10 Part 3 automated evaluation metrics are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 10 Part 4 automated quality regression tests are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -1070,6 +1095,57 @@ Most metrics are deterministic and use structured dataset expectations such as s
 Optional RAGAS integration lives behind `evaluation.metrics.optional_ragas`. If RAGAS is not installed or is incompatible, the optional metric reports itself as non-applicable with a warning and does not fail the run. The custom project metrics remain primary.
 
 Aggregate metrics are grouped by metric, category, intent, region, language, nationality category, execution mode, and tags. Non-applicable values are not averaged, and every aggregate includes sample counts so sparse measurements are visible.
+
+### Regression Tests
+
+Phase 10 Part 4 adds automated quality regression checks under `evaluation/regression/` and fast pytest coverage under `tests/regression/`.
+
+Regression checks compare the current evaluation run against three things:
+
+- explicit minimum or maximum thresholds from `evaluation/regression/thresholds.yaml`
+- committed baseline summaries from `evaluation/baselines/`
+- critical case-specific expectations
+
+The regression layer distinguishes:
+
+- `ThresholdRegression`: the current metric violates an absolute minimum, maximum, or exact-match requirement.
+- `BaselineRegression`: the current metric degrades beyond an allowed absolute or relative difference from the committed baseline.
+- `CriticalCaseRegression`: a protected case fails a required metric.
+- `SafetyRegression`: unsafe behavior appears, such as unsupported claims, fabricated citations, unsafe answers despite insufficient evidence, forbidden clarification questions, or invented planner requirements.
+- `PerformanceRegression`: latency, error rate, or completion behavior degrades beyond limits.
+- `DatasetCompatibilityChange`: the dataset, source registry, or knowledge-base fingerprint changed, so baseline comparison has limited comparability.
+
+Threshold rules support metric direction:
+
+```yaml
+retrieval:
+  hybrid_recall_at_k_10:
+    direction: higher_is_better
+    minimum: 0.80
+    max_absolute_drop: 0.03
+
+generation:
+  unsupported_claim_rate:
+    direction: lower_is_better
+    maximum: 0.05
+    max_absolute_increase: 0.02
+```
+
+Knowledge-base fingerprints are deterministic summaries built from available local metadata: source-registry version, enabled source IDs, local document hashes, document IDs, and optional ChromaDB collection metadata. When the fingerprint differs from the baseline, the regression report marks comparison context as `limited_comparability`. Thresholds are still enforced, but metric movement is not silently treated as purely a code regression.
+
+Committed baselines are summaries only. They must not contain private model outputs, full conversations, personal user data, or full generated answers. New baselines are created through `BaselineGenerationService.create_baseline(...)`, require a human approval note, and refuse to overwrite existing baseline files unless `force=True` is explicitly supplied. Baselines must never update automatically just because a regression test failed.
+
+Run the fast offline regression tests:
+
+```bash
+.venv/bin/python -m pytest tests/regression
+```
+
+Live regression tests are marked with `@pytest.mark.live_evaluation` and are skipped by default. Enable them explicitly only when live model/retrieval calls are intended:
+
+```bash
+RUN_LIVE_EVALUATION=1 .venv/bin/python -m pytest -m live_evaluation
+```
 
 ## Evaluation Datasets
 

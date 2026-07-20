@@ -1,0 +1,25 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "forbidden_question_rate": {"mean": 0.0, "sample_count": 20},
+      "intent_accuracy": {"mean": 0.9, "sample_count": 20},
+      "missing_field_precision": {"mean": 0.85, "sample_count": 18},
+      "missing_field_recall": {"mean": 0.9, "sample_count": 18}
+    }
+  },
+  "approved_notes": "Initial clarification baseline summary. Contains no raw model output.",
+  "baseline_id": "clarification_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "clarification",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {},
+  "prompt_hashes": {},
+  "selected_critical_case_results": {},
+  "source_registry_version": "1"
+}
