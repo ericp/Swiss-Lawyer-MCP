@@ -1,0 +1,26 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "fabricated_citation_rate": {"mean": 0.0, "sample_count": 15},
+      "forbidden_fact_rate": {"mean": 0.0, "sample_count": 15},
+      "insufficient_context_accuracy": {"mean": 0.9, "sample_count": 15},
+      "required_fact_coverage": {"mean": 0.82, "sample_count": 15},
+      "unsupported_claim_rate": {"mean": 0.02, "sample_count": 15}
+    }
+  },
+  "approved_notes": "Initial generation baseline summary. Contains no raw model output.",
+  "baseline_id": "generation_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "generation",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {},
+  "prompt_hashes": {},
+  "selected_critical_case_results": {},
+  "source_registry_version": "1"
+}

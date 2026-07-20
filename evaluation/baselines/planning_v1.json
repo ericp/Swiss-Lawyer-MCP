@@ -1,0 +1,26 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "expected_step_coverage": {"mean": 0.8, "sample_count": 10},
+      "invented_document_rate": {"mean": 0.0, "sample_count": 10},
+      "invented_step_rate": {"mean": 0.0, "sample_count": 10},
+      "required_document_coverage": {"mean": 0.75, "sample_count": 10},
+      "workflow_status_accuracy": {"mean": 0.85, "sample_count": 10}
+    }
+  },
+  "approved_notes": "Initial planning baseline summary. Contains no raw model output.",
+  "baseline_id": "planning_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "planning",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {},
+  "prompt_hashes": {},
+  "selected_critical_case_results": {},
+  "source_registry_version": "1"
+}

@@ -1,0 +1,27 @@
+{
+  "aggregate_metrics": {
+    "by_metric": {
+      "fabricated_citation_rate": {"mean": 0.0, "sample_count": 15},
+      "hybrid_recall_at_k_10": {"mean": 0.75, "sample_count": 15},
+      "insufficient_context_accuracy": {"mean": 0.9, "sample_count": 15},
+      "intent_accuracy": {"mean": 0.85, "sample_count": 15},
+      "unsafe_answer_rate": {"mean": 0.0, "sample_count": 3},
+      "workflow_status_accuracy": {"mean": 0.8, "sample_count": 12}
+    }
+  },
+  "approved_notes": "Initial end-to-end baseline summary. Contains no raw model output.",
+  "baseline_id": "end_to_end_v1_initial",
+  "creation_date": "2026-07-20",
+  "dataset_name": "end_to_end",
+  "dataset_version": "v1",
+  "git_commit": null,
+  "knowledge_base_fingerprint": {
+    "active_source_ids": [],
+    "fingerprint": "seed-local-v1",
+    "source_registry_version": "1"
+  },
+  "model_configuration": {},
+  "prompt_hashes": {},
+  "selected_critical_case_results": {},
+  "source_registry_version": "1"
+}
