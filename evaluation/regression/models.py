@@ -101,6 +101,7 @@ class BaselineSummary(BaseModel):
     """Committed summary baseline without raw private model outputs."""
 
     baseline_id: str
+    source_run_id: str | None = None
     dataset_name: str
     dataset_version: str
     creation_date: date

@@ -60,6 +60,7 @@ class BaselineGenerationService:
 
         baseline = BaselineSummary(
             baseline_id=f"{run_result.metadata.dataset_name}_{run_result.metadata.dataset_version}",
+            source_run_id=run_result.metadata.run_id,
             dataset_name=run_result.metadata.dataset_name,
             dataset_version=run_result.metadata.dataset_version,
             creation_date=date.today(),
