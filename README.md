@@ -2,7 +2,7 @@
 
 Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, and **Phase 10 Part 4: automated quality regression tests**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, the final comparison CLI/formatted report, or mandatory RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, **Phase 10 Part 4: automated quality regression tests**, and **Phase 10 Part 5: evaluation CLI and before/after reports**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, or mandatory RAGAS evaluation.
 
 ## Safety Scope
 
@@ -142,6 +142,7 @@ Swiss Lawyer MCP/
 ├── docs/
 ├── evaluation/
 │   ├── __init__.py
+│   ├── cli.py
 │   ├── config.py
 │   ├── models.py
 │   ├── runner.py
@@ -163,6 +164,11 @@ Swiss Lawyer MCP/
 │   │   ├── planning_v1.json
 │   │   ├── retrieval_v1.json
 │   │   └── smoke_v1.json
+│   ├── comparison/
+│   │   ├── __init__.py
+│   │   ├── comparator.py
+│   │   ├── formatter.py
+│   │   └── models.py
 │   ├── datasets/
 │   │   ├── README.md
 │   │   ├── __init__.py
@@ -212,6 +218,8 @@ Swiss Lawyer MCP/
     │   ├── test_datasets.py
     │   ├── test_evaluation_module.py
     │   └── test_metrics.py
+    ├── comparison/
+    │   └── test_cli_and_reports.py
     ├── regression/
     │   ├── conftest.py
     │   ├── helpers.py
@@ -248,7 +256,7 @@ Swiss Lawyer MCP/
     └── test_workflow_planner.py
 ```
 
-Phase 1 ingestion through Phase 10 Part 4 automated quality regression tests are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+Phase 1 ingestion through Phase 10 Part 5 evaluation CLI and before/after reports are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
 
 The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
 
@@ -1075,7 +1083,7 @@ Run metadata records reproducibility details such as:
 - evaluation configuration
 - retrieval limits and random seed
 
-This prepares the project for regression thresholds and before/after reporting in later Phase 10 work.
+This prepares the project for regression checks and before/after reporting.
 
 ### Automated Metrics
 
@@ -1145,6 +1153,115 @@ Live regression tests are marked with `@pytest.mark.live_evaluation` and are ski
 
 ```bash
 RUN_LIVE_EVALUATION=1 .venv/bin/python -m pytest -m live_evaluation
+```
+
+### Evaluation CLI and Reports
+
+Phase 10 Part 5 adds a developer CLI:
+
+```bash
+python -m evaluation.cli validate-datasets
+python -m evaluation.cli run --dataset smoke/v1 --mode offline
+python -m evaluation.cli run --dataset retrieval/v1 --mode live --tag immigration --yes
+python -m evaluation.cli compare --before <run_id_or_path> --after <run_id_or_path>
+python -m evaluation.cli compare --baseline retrieval_v1 --after <run_id_or_path>
+python -m evaluation.cli baseline create --run <run_id_or_path> --name retrieval_v2 --approval-note "Approved after source-registry expansion"
+python -m evaluation.cli list-runs
+python -m evaluation.cli show-run <run_id_or_path>
+python -m evaluation.cli report <run_id_or_path> --format html
+```
+
+Evaluation run options include:
+
+```text
+--dataset
+--mode offline|live
+--case-id
+--tag
+--max-cases
+--run-name
+--output-dir
+--save-intermediate
+--generation
+--planner
+--judge-model
+--fail-fast
+--seed
+--config
+--notes
+```
+
+Live mode prints a clear warning and refuses to run unless `--yes` is supplied because API-backed evaluations may incur costs.
+
+Before/after comparisons are handled by `evaluation/comparison/`. The comparator inspects:
+
+- aggregate metrics
+- metric categories
+- case-level results
+- latency
+- errors
+- model configuration
+- prompt hashes when available
+- knowledge-base fingerprint
+- source-registry version when available
+
+Report output is written under:
+
+```text
+evaluation/reports/<comparison_id>/
+├── comparison.json
+├── comparison.md
+├── comparison.html
+└── report_metadata.json
+```
+
+The JSON report is machine-readable. The Markdown report is suitable for pull requests. The HTML report is a standalone local file with an executive summary, metric tables, simple charts, critical failures, latency comparison, configuration comparison, warnings, and rule-based investigation recommendations.
+
+Rule-based recommendations are deterministic. Examples:
+
+- Hybrid Recall@10 decreased while BM25 stayed stable: inspect vector embeddings, metadata filters, or ChromaDB document replacement.
+- Citation quality decreased: inspect source serialization, cited source IDs, and the grounded generation prompt.
+- Unsafe-answer rate increased: inspect insufficient-context handling and abstention logic.
+- Reranking latency increased: inspect CrossEncoder loading, batching, and candidate count.
+- Clarification recall decreased: inspect deterministic procedure schemas and required-field definitions.
+
+CLI exit codes:
+
+```text
+0 = passed
+1 = regression failure
+2 = configuration or dataset error
+3 = execution failure
+4 = baseline incompatibility requiring review
+```
+
+Example development workflow:
+
+1. Run the baseline evaluation.
+2. Make a retrieval, prompt, document, or planner change.
+3. Run the same dataset again.
+4. Compare before and after.
+5. Inspect regressions and warnings.
+6. Approve a new baseline only when the change is intentional and validated.
+
+Current Phase 10 evaluation architecture:
+
+```text
+Swiss Lawyer MCP pipeline
+↓
+Evaluation adapters
+↓
+Versioned datasets
+↓
+Automated metrics
+↓
+Regression checks
+↓
+Before/after comparison
+↓
+JSON, Markdown and HTML reports
+↓
+Future CI quality gate
 ```
 
 ## Evaluation Datasets
