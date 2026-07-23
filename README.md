@@ -1,8 +1,8 @@
 # Swiss Lawyer MCP
 
-Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and later expose grounded procedure support through an MCP tool.
+Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and expose grounded procedure support to ChatGPT through a local single-user MCP server.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, **Phase 10 Part 4: automated quality regression tests**, and **Phase 10 Part 5: evaluation CLI and before/after reports**. It does not yet implement MCP integration, OAuth, a frontend, cloud deployment, GitHub Actions scheduling, or mandatory RAGAS evaluation.
+This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, **Phase 10 Part 4: automated quality regression tests**, **Phase 10 Part 5: evaluation CLI and before/after reports**, and **Phase 11: local single-user MCP integration with Docker, ngrok and ChatGPT Developer Mode**. It does not implement OAuth, Azure infrastructure, Azure DevOps, a frontend, permanent cloud deployment, GitHub Actions scheduling, or mandatory RAGAS evaluation.
 
 ## Safety Scope
 
@@ -13,9 +13,12 @@ This project is not a legal adviser. It provides informational guidance only and
 ```text
 Swiss Lawyer MCP/
 ├── .env.example
+├── .dockerignore
 ├── .gitignore
 ├── README.md
 ├── alembic.ini
+├── Dockerfile.api
+├── Dockerfile.mcp
 ├── docker-compose.yml
 ├── migrations/
 │   ├── env.py
@@ -32,10 +35,12 @@ Swiss Lawyer MCP/
 │   │   ├── app.py
 │   │   ├── dependencies.py
 │   │   ├── error_handlers.py
+│   │   ├── internal_auth.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
 │   │   │   ├── admin_synchronization.py
 │   │   │   ├── health.py
+│   │   │   ├── internal_mcp.py
 │   │   │   └── procedures.py
 │   │   └── schemas.py
 │   ├── clarification/
@@ -75,6 +80,25 @@ Swiss Lawyer MCP/
 │   │   │   ├── profile_repository.py
 │   │   │   └── user_repository.py
 │   │   └── test_memory.py
+│   ├── mcp/
+│   │   ├── __init__.py
+│   │   ├── backend_client.py
+│   │   ├── context.py
+│   │   ├── errors.py
+│   │   ├── rate_limit.py
+│   │   ├── schemas.py
+│   │   ├── server.py
+│   │   ├── settings.py
+│   │   ├── identity/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   └── single_user.py
+│   │   └── tools/
+│   │       ├── __init__.py
+│   │       ├── consult.py
+│   │       ├── privacy.py
+│   │       ├── procedures.py
+│   │       └── progress.py
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── chunk.py
@@ -140,6 +164,8 @@ Swiss Lawyer MCP/
 │   └── sqlite/
 │       └── .gitkeep
 ├── docs/
+│   ├── ngrok-chatgpt-setup.md
+│   └── phase-11-mcp.md
 ├── evaluation/
 │   ├── __init__.py
 │   ├── cli.py
@@ -213,6 +239,9 @@ Swiss Lawyer MCP/
 │   │   └── thresholds.yaml
 │   └── reports/
 ├── notebooks/
+├── scripts/
+│   ├── check_local_mcp.sh
+│   └── run_ngrok.sh
 └── tests/
     ├── evaluation/
     │   ├── test_datasets.py
@@ -242,6 +271,7 @@ Swiss Lawyer MCP/
     ├── test_index.py
     ├── test_intent_classifier.py
     ├── test_memory_service.py
+    ├── test_phase11_mcp.py
     ├── test_phase8_api_orchestration.py
     ├── test_phase9_synchronizer.py
     ├── test_planner_models.py
@@ -289,11 +319,28 @@ Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.exampl
 | `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
 | `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
 | `OPENAI_PLANNER_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for workflow planning |
-| `API_HOST` | `127.0.0.1` | Local FastAPI host |
+| `ENVIRONMENT` | `development` | Runtime environment label |
+| `API_HOST` | `0.0.0.0` | FastAPI bind host inside Docker |
 | `API_PORT` | `8000` | Local FastAPI port |
 | `SQLITE_DATABASE_URL` | `sqlite:///data/sqlite/memory.db` | SQLAlchemy database URL for user memory |
 | `REQUEST_TIMEOUT_SECONDS` | `60` | Request timeout budget for API clients and future callers |
 | `LOG_LEVEL` | `INFO` | API logging level |
+| `MCP_SERVER_NAME` | `Swiss Lawyer` | MCP server display name |
+| `MCP_SERVER_VERSION` | `1.0.0` | MCP server version |
+| `MCP_HOST` | `0.0.0.0` | MCP bind host inside Docker |
+| `MCP_PORT` | `8001` | MCP container port |
+| `MCP_PATH` | `/mcp` | Streamable HTTP MCP path |
+| `MCP_AUTH_MODE` | `single_user` | Fixed local identity mode |
+| `MCP_SINGLE_USER_KEY` | placeholder | Fixed server-side local memory identity |
+| `MCP_PUBLIC_BASE_URL` | empty | Optional external ngrok base URL |
+| `SWISS_LAWYER_API_BASE_URL` | `http://api:8000` | Internal FastAPI URL used by MCP |
+| `INTERNAL_SERVICE_TOKEN` | placeholder | Internal MCP-to-FastAPI service token |
+| `MCP_BACKEND_TIMEOUT_SECONDS` | `90` | MCP-to-FastAPI timeout |
+| `MCP_MAX_QUESTION_LENGTH` | `10000` | Maximum question length accepted by MCP |
+| `MCP_MAX_PROFILE_FIELDS` | `50` | Maximum profile field count accepted by MCP |
+| `MCP_MAX_PROGRESS_NOTE_LENGTH` | `5000` | Maximum progress note length accepted by MCP |
+| `MCP_RATE_LIMIT_REQUESTS_PER_MINUTE` | `30` | Per-process local MCP request limit |
+| `NGROK_DOMAIN` | empty | Optional reserved ngrok domain |
 | `ENABLE_SYNC_ADMIN_ENDPOINTS` | `false` | Enables development-only synchronization admin endpoints |
 | `SYNC_SOURCE_REGISTRY_PATH` | `data/pdfs/metadata/sources.yaml` | Curated source registry path |
 | `SYNC_PDF_PATH` | `data/pdfs` | Local storage root for synchronized PDFs |
@@ -616,7 +663,7 @@ The API layer is intentionally thin:
 - `backend/orchestration/procedure_orchestrator.py` coordinates clarification, retrieval, reranking, generation, planning, and memory.
 - `backend/location/canton_resolver.py` deterministically resolves known Swiss cities to cantons.
 
-Current Phase 8 architecture:
+Phase 8 architecture before the MCP adapter:
 
 ```text
 ChatGPT in a later phase
@@ -667,6 +714,85 @@ Record concise interaction summary
 ↓
 Return answer, plan, sources, and procedure state
 ```
+
+## Local MCP, Docker and ngrok
+
+Phase 11 exposes the Phase 8 workflow to ChatGPT through a local MCP server. The deployment is intentionally private and single-user:
+
+```text
+Eric in ChatGPT
+↓
+ChatGPT Developer Mode app
+Authentication: No Authentication
+↓
+Public ngrok HTTPS endpoint
+↓
+ngrok agent on Eric's Mac
+↓
+http://127.0.0.1:8001/mcp
+↓
+Docker Compose
+├── MCP container
+│   ├── Four MCP tools
+│   ├── Fixed single-user identity
+│   └── Internal service authentication
+├── FastAPI container
+│   └── ProcedureOrchestrator
+└── ./data mounted as persistent local storage
+```
+
+The MCP server exposes exactly four tools:
+
+- `consult_swiss_procedure`
+- `get_my_procedures`
+- `update_my_procedure`
+- `delete_my_swiss_lawyer_data`
+
+The MCP tool schemas do not accept `user_id`, `external_user_key`, OAuth claims, account IDs, retrieval controls, model names, or prompt configuration. Identity is always injected by `SingleUserIdentityProvider` from:
+
+```bash
+MCP_AUTH_MODE=single_user
+MCP_SINGLE_USER_KEY=replace-with-a-private-local-key
+```
+
+MCP-to-FastAPI calls use a separate internal service token:
+
+```text
+Authorization: Bearer <INTERNAL_SERVICE_TOKEN>
+```
+
+This authenticates the MCP container to the private FastAPI route group. It is not user authentication.
+
+Normal local workflow:
+
+```bash
+cp .env.example .env
+docker compose up --build
+./scripts/check_local_mcp.sh
+./scripts/run_ngrok.sh
+```
+
+Use MCP Inspector locally at:
+
+```text
+http://127.0.0.1:8001/mcp
+```
+
+Configure ChatGPT Developer Mode with the ngrok URL ending in `/mcp` and choose **No Authentication**. Exact ChatGPT UI wording may change.
+
+Security limitations:
+
+- ngrok forwards public HTTPS traffic to localhost port `8001`.
+- FastAPI port `8000` is not publicly exposed by Compose.
+- The MCP endpoint has no user authentication.
+- One server-side identity owns all stored memory.
+- The endpoint is public while ngrok is running.
+- The Mac, Docker and ngrok must stay running.
+- This setup is suitable only for private testing and portfolio demos.
+- OAuth and permanent hosted infrastructure are required before public multi-user use.
+- Azure and Azure DevOps are not required.
+
+See [docs/phase-11-mcp.md](docs/phase-11-mcp.md) and [docs/ngrok-chatgpt-setup.md](docs/ngrok-chatgpt-setup.md).
 
 ### Endpoints
 
