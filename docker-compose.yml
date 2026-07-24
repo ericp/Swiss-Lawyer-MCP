@@ -6,18 +6,28 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AI_MODE: ${AI_MODE:-local}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      GENERATION_PROVIDER: ${GENERATION_PROVIDER:-ollama}
+      GENERATION_MODEL: ${GENERATION_MODEL:-llama3.2}
+      PLANNER_PROVIDER: ${PLANNER_PROVIDER:-ollama}
+      PLANNER_MODEL: ${PLANNER_MODEL:-llama3.2}
+      RERANKER_PROVIDER: ${RERANKER_PROVIDER:-disabled}
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL:-gpt-4o-mini}
-      OPENAI_PLANNER_MODEL: ${OPENAI_PLANNER_MODEL:-gpt-4o-mini}
       API_HOST: 0.0.0.0
       API_PORT: 8000
       SQLITE_DATABASE_URL: ${SQLITE_DATABASE_URL:-sqlite:///data/sqlite/memory.db}
       CHROMA_PATH: ${CHROMA_PATH:-data/chromadb}
-      CHROMA_COLLECTION: ${CHROMA_COLLECTION:-swiss_procedures}
+      CHROMA_COLLECTION_BASE: ${CHROMA_COLLECTION_BASE:-swiss_lawyer}
+      ANONYMIZED_TELEMETRY: ${ANONYMIZED_TELEMETRY:-False}
       PDF_ROOT: ${PDF_ROOT:-data/pdfs}
       SYNC_DOCUMENT_PATH: ${SYNC_DOCUMENT_PATH:-data/documents}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-replace-with-a-long-random-value}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
     expose:
@@ -44,6 +54,7 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AI_MODE: ${AI_MODE:-local}
       MCP_SERVER_NAME: ${MCP_SERVER_NAME:-Swiss Lawyer}
       MCP_SERVER_VERSION: ${MCP_SERVER_VERSION:-1.0.0}
       MCP_HOST: 0.0.0.0

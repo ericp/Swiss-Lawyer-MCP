@@ -17,7 +17,11 @@ def health() -> dict[str, object]:
     critical = [components["application"], components["sqlite"], components["chromadb"]]
     if any(status == "unhealthy" for status in critical):
         status = "unhealthy"
-    elif components["openai_configuration"] != "available":
+    elif components.get("ollama") == "unhealthy":
+        status = "degraded"
+    elif components.get("ollama_models") == "missing":
+        status = "degraded"
+    elif components["openai_configuration"] == "missing":
         status = "degraded"
     else:
         status = "healthy"

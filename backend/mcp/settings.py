@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from backend.utils.config import load_project_env
+
 
 @dataclass(frozen=True)
 class MCPSettings:
@@ -50,6 +52,7 @@ class MCPSettings:
 
 
 def load_mcp_settings() -> MCPSettings:
+    load_project_env()
     return MCPSettings(
         server_name=os.getenv("MCP_SERVER_NAME", "Swiss Lawyer"),
         server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),

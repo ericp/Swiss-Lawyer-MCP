@@ -323,7 +323,13 @@ def test_docker_compose_and_scripts() -> None:
     services = compose["services"]
     assert set(services) == {"api", "mcp"}
     assert services["mcp"]["environment"]["SWISS_LAWYER_API_BASE_URL"] == "http://api:8000"
+    assert services["api"]["environment"]["AI_MODE"] == "${AI_MODE:-local}"
+    assert services["api"]["environment"]["EMBEDDING_PROVIDER"] == "${EMBEDDING_PROVIDER:-ollama}"
+    assert services["api"]["environment"]["OLLAMA_BASE_URL"] == "${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
+    assert services["api"]["extra_hosts"] == ["host.docker.internal:host-gateway"]
     assert services["mcp"]["ports"] == ["127.0.0.1:8001:8001"]
+    assert "EMBEDDING_MODEL" not in services["mcp"]["environment"]
+    assert "GENERATION_MODEL" not in services["mcp"]["environment"]
     assert "ports" not in services["api"]
     assert "./data:/app/data" in services["api"]["volumes"]
     assert "./data:/app/data" in services["mcp"]["volumes"]
@@ -332,3 +338,9 @@ def test_docker_compose_and_scripts() -> None:
     assert Path("scripts/run_ngrok.sh").read_text().count("ngrok http") >= 1
     assert "8001" in Path("scripts/run_ngrok.sh").read_text()
     assert "authtoken" not in Path("scripts/run_ngrok.sh").read_text().lower()
+    assert "requirements-api.txt" in Path("Dockerfile.api").read_text()
+    assert "requirements-mcp.txt" in Path("Dockerfile.mcp").read_text()
+    mcp_requirements = Path("requirements-mcp.txt").read_text()
+    assert "sentence-transformers" not in mcp_requirements
+    assert "torch" not in mcp_requirements
+    assert "chromadb" not in mcp_requirements

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
-from openai import OpenAI
+from pydantic import ValidationError
 
 from backend.generation.source_attribution import format_context
 from backend.models.clarification import DetectedIntent
@@ -14,6 +15,7 @@ from backend.models.planner import ProcedurePlan, WorkflowStatus
 from backend.models.reranking import RerankedChunk
 from backend.models.user_profile import UserProfile
 from backend.planners.prompts import load_workflow_planner_system_prompt
+from backend.utils.config import load_project_env
 
 NOT_SPECIFIED = "Not specified in retrieved sources."
 
@@ -29,9 +31,17 @@ class WorkflowPlanner:
         client: Any | None = None,
         system_prompt: str | None = None,
     ) -> None:
+        load_project_env()
+        if client is None and os.getenv("AI_MODE", "").strip().lower() == "local":
+            raise RuntimeError("OpenAI provider was requested while AI_MODE=local.")
         if not api_key and client is None:
             raise ValueError("OPENAI_API_KEY is required to create workflow plans")
-        self._client = client or OpenAI(api_key=api_key)
+        if client is None:
+            from openai import OpenAI
+
+            self._client = OpenAI(api_key=api_key)
+        else:
+            self._client = client
         self._model = model
         self._system_prompt = system_prompt or load_workflow_planner_system_prompt()
 
@@ -52,37 +62,80 @@ class WorkflowPlanner:
                 generated_answer=generated_answer,
             )
 
-        response = self._client.chat.completions.create(
+        messages = [
+            {"role": "system", "content": self._system_prompt},
+            {
+                "role": "user",
+                "content": _build_planner_user_prompt(
+                    user_question=user_question,
+                    detected_intent=detected_intent,
+                    user_profile=user_profile,
+                    generated_answer=generated_answer,
+                    reranked_chunks=reranked_chunks,
+                ),
+            },
+        ]
+        payload = _load_json_with_repair(
+            client=self._client,
             model=self._model,
-            messages=[
-                {"role": "system", "content": self._system_prompt},
-                {
-                    "role": "user",
-                    "content": _build_planner_user_prompt(
-                        user_question=user_question,
-                        detected_intent=detected_intent,
-                        user_profile=user_profile,
-                        generated_answer=generated_answer,
-                        reranked_chunks=reranked_chunks,
-                    ),
-                },
-            ],
-            response_format={"type": "json_object"},
+            messages=messages,
         )
-        content = response.choices[0].message.content
-        if not content:
+        if payload is None:
             return _insufficient_context_plan(
                 user_question=user_question,
                 generated_answer=generated_answer,
             )
 
-        payload = json.loads(content)
         payload["source_references"] = _filter_source_references(
             generated_sources=payload.get("source_references", []),
             allowed_sources=generated_answer.cited_sources,
         )
-        plan = ProcedurePlan.model_validate(payload)
+        try:
+            plan = ProcedurePlan.model_validate(payload)
+        except ValidationError:
+            return _insufficient_context_plan(
+                user_question=user_question,
+                generated_answer=generated_answer,
+            )
         return _apply_planner_safeguards(plan, generated_answer)
+
+
+def _load_json_with_repair(
+    *,
+    client: Any,
+    model: str,
+    messages: list[dict[str, str]],
+) -> dict[str, Any] | None:
+    content = _call_chat_json(client=client, model=model, messages=messages)
+    if not content:
+        return None
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        repair_messages = [
+            *messages,
+            {"role": "assistant", "content": content},
+            {
+                "role": "user",
+                "content": "Return only valid JSON for the previous workflow plan. Do not add commentary.",
+            },
+        ]
+        repaired = _call_chat_json(client=client, model=model, messages=repair_messages)
+        if not repaired:
+            return None
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
+
+
+def _call_chat_json(*, client: Any, model: str, messages: list[dict[str, str]]) -> str | None:
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        response_format={"type": "json_object"},
+    )
+    return response.choices[0].message.content
 
 
 def _build_planner_user_prompt(

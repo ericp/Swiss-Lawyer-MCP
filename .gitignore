@@ -15,3 +15,4 @@ data/sqlite/*
 
 evaluation/artifacts/*
 !evaluation/artifacts/.gitkeep
+.env.example

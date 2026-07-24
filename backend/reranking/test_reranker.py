@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import create_embedder
 from backend.models.reranking import RerankedChunk
 from backend.models.retrieval import RetrievedChunk
-from backend.reranking.reranker import CrossEncoderReranker
+from backend.reranking.reranker import create_reranker
 from backend.reranking.reranking_service import RerankingService
 from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
@@ -17,7 +17,7 @@ from backend.utils.config import load_retrieval_settings
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run hybrid retrieval and local CrossEncoder reranking."
+        description="Run hybrid retrieval and configured reranking."
     )
     parser.add_argument(
         "question",
@@ -32,9 +32,13 @@ def main() -> None:
     retrieval_top_k = args.retrieval_top_k or settings.top_k
     rerank_top_k = args.rerank_top_k or settings.rerank_top_k
 
-    embedder = OpenAIEmbedder(
-        api_key=settings.openai_api_key,
+    embedder = create_embedder(
+        provider=settings.embedding_provider,
+        ai_mode=settings.ai_mode,
         model=settings.embedding_model,
+        openai_api_key=settings.openai_api_key,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_timeout_seconds=settings.ollama_timeout_seconds,
     )
     hybrid_retriever = HybridRetriever(
         vector_retriever=VectorRetriever(
@@ -49,7 +53,10 @@ def main() -> None:
     )
     reranking_service = RerankingService(
         hybrid_retriever=hybrid_retriever,
-        reranker=CrossEncoderReranker(model_name=settings.rerank_model),
+        reranker=create_reranker(
+            provider=settings.reranker_provider,
+            model_name=settings.rerank_model,
+        ),
     )
 
     retrieval_result, rerank_result = reranking_service.retrieve_and_rerank(

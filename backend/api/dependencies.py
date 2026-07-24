@@ -12,8 +12,9 @@ from sqlalchemy import Engine, text
 
 from backend.clarification.clarification_engine import ClarificationEngine
 from backend.clarification.intent_classifier import IntentClassifier
+from backend.generation.factory import create_answer_generator, create_workflow_planner
 from backend.generation.answer_generator import GroundedAnswerGenerator
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import create_embedder
 from backend.ingestion.vector_store import ChromaChunkStore
 from backend.location.canton_resolver import CantonResolver
 from backend.memory.database import (
@@ -23,7 +24,7 @@ from backend.memory.database import (
 from backend.memory.memory_service import MemoryService
 from backend.orchestration.procedure_orchestrator import ProcedureOrchestrator
 from backend.planners.workflow_planner import WorkflowPlanner
-from backend.reranking.reranker import CrossEncoderReranker
+from backend.reranking.reranker import create_reranker
 from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
 from backend.retrieval.vector import VectorRetriever
@@ -39,6 +40,7 @@ from backend.utils.config import (
     load_retrieval_settings,
     load_synchronizer_settings,
 )
+from backend.utils.ollama_health import check_ollama_health
 
 
 @lru_cache
@@ -107,9 +109,13 @@ def get_canton_resolver() -> CantonResolver:
 @lru_cache
 def get_hybrid_retriever() -> HybridRetriever:
     settings = get_retrieval_settings()
-    embedder = OpenAIEmbedder(
-        api_key=settings.openai_api_key,
+    embedder = create_embedder(
+        provider=settings.embedding_provider,
+        ai_mode=settings.ai_mode,
         model=settings.embedding_model,
+        openai_api_key=settings.openai_api_key,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_timeout_seconds=settings.ollama_timeout_seconds,
     )
     vector = VectorRetriever(
         path=settings.chroma_path,
@@ -124,26 +130,22 @@ def get_hybrid_retriever() -> HybridRetriever:
 
 
 @lru_cache
-def get_reranker() -> CrossEncoderReranker:
-    return CrossEncoderReranker(model_name=get_retrieval_settings().rerank_model)
+def get_reranker() -> Any:
+    settings = get_retrieval_settings()
+    return create_reranker(
+        provider=settings.reranker_provider,
+        model_name=settings.rerank_model,
+    )
 
 
 @lru_cache
 def get_answer_generator() -> GroundedAnswerGenerator:
-    settings = get_generation_settings()
-    return GroundedAnswerGenerator(
-        api_key=settings.openai_api_key,
-        model=settings.model,
-    )
+    return create_answer_generator(get_generation_settings())
 
 
 @lru_cache
 def get_workflow_planner() -> WorkflowPlanner:
-    settings = get_generation_settings()
-    return WorkflowPlanner(
-        api_key=settings.openai_api_key,
-        model=settings.planner_model,
-    )
+    return create_workflow_planner(get_generation_settings())
 
 
 @lru_cache
@@ -160,10 +162,13 @@ def get_sync_http_client() -> SyncHttpClient:
 
 def get_source_synchronizer() -> SourceSynchronizer:
     settings = get_synchronizer_settings()
-    embedder = (
-        OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
-        if settings.openai_api_key
-        else None
+    embedder = create_embedder(
+        provider=settings.embedding_provider,
+        ai_mode=settings.ai_mode,
+        model=settings.embedding_model,
+        openai_api_key=settings.openai_api_key,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_timeout_seconds=settings.ollama_timeout_seconds,
     )
     chunk_store = ChromaChunkStore(
         path=settings.chroma_path,
@@ -202,6 +207,8 @@ def check_health_components() -> dict[str, str]:
         "sqlite": "healthy",
         "chromadb": "healthy",
         "openai_configuration": "available",
+        "ollama": "not_applicable",
+        "ollama_models": "not_applicable",
     }
     try:
         with get_memory_engine().connect() as connection:
@@ -215,7 +222,21 @@ def check_health_components() -> dict[str, str]:
     except Exception:
         components["chromadb"] = "unhealthy"
 
-    if not os.getenv("OPENAI_API_KEY"):
+    generation_settings = get_generation_settings()
+    retrieval_settings = get_retrieval_settings()
+    if generation_settings.ai_mode == "local":
+        components["openai_configuration"] = "not_required"
+        health = check_ollama_health(
+            base_url=generation_settings.ollama_base_url,
+            required_models=[
+                retrieval_settings.embedding_model,
+                generation_settings.model,
+                generation_settings.planner_model,
+            ],
+        )
+        components["ollama"] = health.status if health.reachable else "unhealthy"
+        components["ollama_models"] = "healthy" if not health.missing_models else "missing"
+    elif not os.getenv("OPENAI_API_KEY"):
         components["openai_configuration"] = "missing"
 
     return components

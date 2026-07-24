@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import create_embedder
 from backend.models.retrieval import RetrievedChunk
 from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
@@ -25,9 +25,13 @@ def main() -> None:
     settings = load_retrieval_settings()
     top_k = args.top_k or settings.top_k
 
-    embedder = OpenAIEmbedder(
-        api_key=settings.openai_api_key,
+    embedder = create_embedder(
+        provider=settings.embedding_provider,
+        ai_mode=settings.ai_mode,
         model=settings.embedding_model,
+        openai_api_key=settings.openai_api_key,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_timeout_seconds=settings.ollama_timeout_seconds,
     )
     vector_retriever = VectorRetriever(
         path=settings.chroma_path,

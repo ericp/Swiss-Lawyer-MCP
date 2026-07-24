@@ -1,11 +1,12 @@
-"""Grounded answer generation using OpenAI GPT."""
+"""Grounded answer generation using a configured chat provider."""
 
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
-from openai import OpenAI
+from pydantic import ValidationError
 
 from backend.generation.confidence import Confidence, estimate_confidence
 from backend.generation.prompts import load_grounded_answer_system_prompt
@@ -14,6 +15,7 @@ from backend.models.clarification import DetectedIntent
 from backend.models.generation import CitedSource, GeneratedAnswer
 from backend.models.reranking import RerankedChunk
 from backend.models.user_profile import UserProfile
+from backend.utils.config import load_project_env
 
 INSUFFICIENT_CONTEXT_MESSAGE = (
     "The retrieved official documentation does not contain enough information "
@@ -32,9 +34,17 @@ class GroundedAnswerGenerator:
         client: Any | None = None,
         system_prompt: str | None = None,
     ) -> None:
+        load_project_env()
+        if client is None and os.getenv("AI_MODE", "").strip().lower() == "local":
+            raise RuntimeError("OpenAI provider was requested while AI_MODE=local.")
         if not api_key and client is None:
             raise ValueError("OPENAI_API_KEY is required to generate answers")
-        self._client = client or OpenAI(api_key=api_key)
+        if client is None:
+            from openai import OpenAI
+
+            self._client = OpenAI(api_key=api_key)
+        else:
+            self._client = client
         self._model = model
         self._system_prompt = system_prompt or load_grounded_answer_system_prompt()
 
@@ -54,27 +64,25 @@ class GroundedAnswerGenerator:
         if not reranked_chunks:
             return _insufficient_answer(confidence=confidence, citations=citations)
 
-        response = self._client.chat.completions.create(
+        messages = [
+            {"role": "system", "content": self._system_prompt},
+            {
+                "role": "user",
+                "content": _build_user_prompt(
+                    user_question=user_question,
+                    detected_intent=detected_intent,
+                    user_profile=user_profile,
+                    reranked_chunks=reranked_chunks,
+                ),
+            },
+        ]
+        payload = _load_json_with_repair(
+            client=self._client,
             model=self._model,
-            messages=[
-                {"role": "system", "content": self._system_prompt},
-                {
-                    "role": "user",
-                    "content": _build_user_prompt(
-                        user_question=user_question,
-                        detected_intent=detected_intent,
-                        user_profile=user_profile,
-                        reranked_chunks=reranked_chunks,
-                    ),
-                },
-            ],
-            response_format={"type": "json_object"},
+            messages=messages,
         )
-        content = response.choices[0].message.content
-        if not content:
+        if payload is None:
             return _insufficient_answer(confidence=confidence, citations=citations)
-
-        payload = json.loads(content)
         if payload.get("insufficient_context") is True:
             payload["answer"] = INSUFFICIENT_CONTEXT_MESSAGE
             payload["explanation"] = INSUFFICIENT_CONTEXT_MESSAGE
@@ -84,7 +92,51 @@ class GroundedAnswerGenerator:
             generated_sources=payload.get("cited_sources", []),
             required_sources=citations,
         )
-        return GeneratedAnswer.model_validate(payload)
+        try:
+            return GeneratedAnswer.model_validate(payload)
+        except ValidationError:
+            return _insufficient_answer(confidence=confidence, citations=citations)
+
+
+def _load_json_with_repair(
+    *,
+    client: Any,
+    model: str,
+    messages: list[dict[str, str]],
+) -> dict[str, Any] | None:
+    content = _call_chat_json(client=client, model=model, messages=messages)
+    if not content:
+        return None
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        repair_messages = [
+            *messages,
+            {
+                "role": "assistant",
+                "content": content,
+            },
+            {
+                "role": "user",
+                "content": "Return only valid JSON for the previous answer. Do not add commentary.",
+            },
+        ]
+        repaired = _call_chat_json(client=client, model=model, messages=repair_messages)
+        if not repaired:
+            return None
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
+
+
+def _call_chat_json(*, client: Any, model: str, messages: list[dict[str, str]]) -> str | None:
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        response_format={"type": "json_object"},
+    )
+    return response.choices[0].message.content
 
 
 def _build_user_prompt(

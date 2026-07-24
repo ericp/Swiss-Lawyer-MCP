@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import create_embedder
 from backend.ingestion.vector_store import ChromaChunkStore
 from backend.memory.database import create_memory_engine, create_session_factory
 from backend.synchronizer.http_client import SyncHttpClient
@@ -18,10 +18,13 @@ from backend.utils.config import load_synchronizer_settings
 def build_service() -> SourceSynchronizer:
     settings = load_synchronizer_settings()
     engine = create_memory_engine(settings.sqlite_database_url)
-    embedder = (
-        OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
-        if settings.openai_api_key
-        else None
+    embedder = create_embedder(
+        provider=settings.embedding_provider,
+        ai_mode=settings.ai_mode,
+        model=settings.embedding_model,
+        openai_api_key=settings.openai_api_key,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_timeout_seconds=settings.ollama_timeout_seconds,
     )
     return SourceSynchronizer(
         settings=settings,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from backend.models.reranking import RerankResult
 from backend.models.retrieval import HybridRetrievalResult
-from backend.reranking.reranker import CrossEncoderReranker
 from backend.retrieval.hybrid import HybridRetriever
 
 
@@ -15,7 +14,7 @@ class RerankingService:
         self,
         *,
         hybrid_retriever: HybridRetriever,
-        reranker: CrossEncoderReranker,
+        reranker: object,
     ) -> None:
         self._hybrid_retriever = hybrid_retriever
         self._reranker = reranker

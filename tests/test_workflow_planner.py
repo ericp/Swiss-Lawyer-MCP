@@ -102,6 +102,48 @@ def test_workflow_planner_parses_openai_output() -> None:
     client.chat.completions.create.assert_called_once()
 
 
+def test_workflow_planner_repairs_invalid_json_once() -> None:
+    client = MagicMock()
+    client.chat.completions.create.side_effect = [
+        _planner_response("not json"),
+        _planner_response(
+            """
+            {
+              "title": "Procedure",
+              "summary": "Summary",
+              "status": "ready_to_start",
+              "steps": [],
+              "required_documents": ["Document"],
+              "estimated_timelines": ["Not specified in retrieved sources."],
+              "potential_blockers": ["Not specified in retrieved sources."],
+              "next_recommended_action": "Start with official confirmation.",
+              "source_references": [],
+              "missing_information": []
+            }
+            """
+        ),
+    ]
+    planner = WorkflowPlanner(
+        api_key=None,
+        model="test-model",
+        client=client,
+        system_prompt="planner system",
+    )
+
+    plan = planner.create_plan(
+        user_question="Question",
+        detected_intent=DetectedIntent(intent="immigration", confidence=0.9),
+        user_profile=UserProfile(),
+        generated_answer=_generated_answer(),
+        reranked_chunks=[_chunk()],
+    )
+
+    assert plan.title == "Procedure"
+    assert client.chat.completions.create.call_count == 2
+    repair_messages = client.chat.completions.create.call_args.kwargs["messages"]
+    assert "Return only valid JSON" in repair_messages[-1]["content"]
+
+
 def test_insufficient_context_returns_needs_more_information_without_openai_call() -> None:
     client = MagicMock()
     planner = WorkflowPlanner(
