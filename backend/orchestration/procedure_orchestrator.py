@@ -21,7 +21,6 @@ from backend.orchestration.models import (
     SourceReference,
 )
 from backend.planners.workflow_planner import WorkflowPlanner
-from backend.reranking.reranker import CrossEncoderReranker
 from backend.retrieval.hybrid import HybridRetriever
 
 
@@ -55,7 +54,7 @@ class ProcedureOrchestrator:
         intent_classifier: IntentClassifier,
         clarification_engine: ClarificationEngine,
         hybrid_retriever: HybridRetriever,
-        reranker: CrossEncoderReranker,
+        reranker: Any,
         answer_generator: GroundedAnswerGenerator,
         workflow_planner: WorkflowPlanner,
         canton_resolver: CantonResolver,

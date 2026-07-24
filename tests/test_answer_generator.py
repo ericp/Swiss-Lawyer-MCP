@@ -143,6 +143,46 @@ def test_generator_filters_invented_sources_and_enforces_insufficient_message() 
     assert [source.source for source in answer.cited_sources] == ["work.pdf"]
 
 
+def test_generator_repairs_invalid_json_once() -> None:
+    client = MagicMock()
+    repaired_content = """
+    {
+      "answer": "Grounded answer.",
+      "explanation": "Grounded explanation.",
+      "procedure_steps": ["Use official procedure"],
+      "important_notes": ["Use official sources."],
+      "cited_sources": [],
+      "insufficient_context": false
+    }
+    """
+    client.chat.completions.create.side_effect = [
+        SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="not valid json"))]
+        ),
+        SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=repaired_content))]
+        ),
+    ]
+    generator = GroundedAnswerGenerator(
+        api_key=None,
+        model="test-model",
+        client=client,
+        system_prompt="system prompt",
+    )
+
+    answer = generator.generate(
+        user_question="Can I work?",
+        detected_intent=DetectedIntent(intent="work_permit", confidence=0.8),
+        user_profile=UserProfile(nationality="Brazil"),
+        reranked_chunks=[_chunk("chunk-1", source="work.pdf", page=1)],
+    )
+
+    assert answer.answer == "Grounded answer."
+    assert client.chat.completions.create.call_count == 2
+    repair_messages = client.chat.completions.create.call_args.kwargs["messages"]
+    assert "Return only valid JSON" in repair_messages[-1]["content"]
+
+
 def test_estimate_confidence_uses_retrieval_quality_signals() -> None:
     assert estimate_confidence([]) == "Low"
     assert estimate_confidence([_chunk("chunk-1", rerank_score=0.3)]) == "Low"

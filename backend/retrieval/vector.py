@@ -7,7 +7,7 @@ from typing import Any
 
 import chromadb
 
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import Embedder
 from backend.models.chunk import ChunkMetadata
 from backend.models.retrieval import RetrievedChunk
 
@@ -20,7 +20,7 @@ class VectorRetriever:
         *,
         path: Path,
         collection_name: str,
-        embedder: OpenAIEmbedder,
+        embedder: Embedder,
         collection: Any | None = None,
     ) -> None:
         self._embedder = embedder

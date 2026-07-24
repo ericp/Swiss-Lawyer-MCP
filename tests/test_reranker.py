@@ -7,6 +7,7 @@ from backend.models.retrieval import RetrievedChunk
 from backend.reranking.reranker import (
     DEFAULT_RERANK_MODEL,
     CrossEncoderReranker,
+    DisabledReranker,
 )
 
 
@@ -82,3 +83,18 @@ def test_reranker_rejects_invalid_top_k() -> None:
 
     with pytest.raises(ValueError):
         reranker.rerank(query="Question", retrieved_chunks=[], top_k=0)
+
+
+def test_disabled_reranker_uses_retrieval_scores_without_cross_encoder() -> None:
+    chunks = [
+        _retrieved_chunk("chunk-1", "First.", 0.9),
+        _retrieved_chunk("chunk-2", "Second.", 0.7),
+    ]
+    reranker = DisabledReranker()
+
+    result = reranker.rerank(query="Question", retrieved_chunks=chunks, top_k=1)
+
+    assert result.total_candidates == 2
+    assert result.selected_candidates == 1
+    assert result.chunks[0].chunk_id == "chunk-1"
+    assert result.chunks[0].rerank_score == 0.9

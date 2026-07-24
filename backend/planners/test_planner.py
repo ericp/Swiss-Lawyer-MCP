@@ -8,7 +8,7 @@ from backend.models.generation import CitedSource, GeneratedAnswer
 from backend.models.planner import ProcedurePlan
 from backend.models.reranking import RerankedChunk
 from backend.models.user_profile import UserProfile
-from backend.planners.workflow_planner import WorkflowPlanner
+from backend.generation.factory import create_workflow_planner
 from backend.utils.config import load_generation_settings
 
 
@@ -18,10 +18,7 @@ def main() -> None:
     generated_answer = _example_generated_answer()
     reranked_chunks = _example_reranked_chunks()
 
-    planner = WorkflowPlanner(
-        api_key=settings.openai_api_key,
-        model=settings.planner_model,
-    )
+    planner = create_workflow_planner(settings)
     plan = planner.create_plan(
         user_question=question,
         detected_intent=DetectedIntent(

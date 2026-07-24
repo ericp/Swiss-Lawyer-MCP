@@ -14,11 +14,27 @@ class ChromaChunkStore:
 
     def __init__(self, *, path: Path, collection_name: str, collection: object | None = None) -> None:
         self._client = chromadb.PersistentClient(path=str(path))
+        self._collection_name = collection_name
         self._collection = (
             collection
             if collection is not None
             else self._client.get_or_create_collection(name=collection_name)
         )
+
+    @property
+    def collection_name(self) -> str:
+        """Return the target ChromaDB collection name."""
+
+        return self._collection_name
+
+    def reset_collection(self) -> None:
+        """Delete and recreate only the target ChromaDB collection."""
+
+        try:
+            self._client.delete_collection(name=self._collection_name)
+        except Exception:
+            pass
+        self._collection = self._client.get_or_create_collection(name=self._collection_name)
 
     def add_chunks(self, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
         """Insert chunks with their embeddings and metadata."""

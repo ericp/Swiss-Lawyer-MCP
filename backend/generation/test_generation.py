@@ -9,11 +9,12 @@ from pydantic import ValidationError
 
 from backend.clarification.clarification_engine import ClarificationEngine
 from backend.clarification.intent_classifier import IntentClassifier
+from backend.generation.factory import create_answer_generator
 from backend.generation.answer_generator import GroundedAnswerGenerator
-from backend.ingestion.embeddings import OpenAIEmbedder
+from backend.ingestion.embeddings import create_embedder
 from backend.models.generation import GeneratedAnswer
 from backend.models.user_profile import UserProfile
-from backend.reranking.reranker import CrossEncoderReranker
+from backend.reranking.reranker import create_reranker
 from backend.reranking.reranking_service import RerankingService
 from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
@@ -66,9 +67,13 @@ def main() -> None:
     retrieval_top_k = args.retrieval_top_k or retrieval_settings.top_k
     rerank_top_k = args.rerank_top_k or retrieval_settings.rerank_top_k
 
-    embedder = OpenAIEmbedder(
-        api_key=retrieval_settings.openai_api_key,
+    embedder = create_embedder(
+        provider=retrieval_settings.embedding_provider,
+        ai_mode=retrieval_settings.ai_mode,
         model=retrieval_settings.embedding_model,
+        openai_api_key=retrieval_settings.openai_api_key,
+        ollama_base_url=retrieval_settings.ollama_base_url,
+        ollama_timeout_seconds=retrieval_settings.ollama_timeout_seconds,
     )
     hybrid_retriever = HybridRetriever(
         vector_retriever=VectorRetriever(
@@ -83,7 +88,10 @@ def main() -> None:
     )
     reranking_service = RerankingService(
         hybrid_retriever=hybrid_retriever,
-        reranker=CrossEncoderReranker(model_name=retrieval_settings.rerank_model),
+        reranker=create_reranker(
+            provider=retrieval_settings.reranker_provider,
+            model_name=retrieval_settings.rerank_model,
+        ),
     )
     _, rerank_result = reranking_service.retrieve_and_rerank(
         args.question,
@@ -91,10 +99,7 @@ def main() -> None:
         rerank_top_k=rerank_top_k,
     )
 
-    generator = GroundedAnswerGenerator(
-        api_key=generation_settings.openai_api_key,
-        model=generation_settings.model,
-    )
+    generator = create_answer_generator(generation_settings)
     answer = generator.generate(
         user_question=args.question,
         detected_intent=detected_intent,

@@ -1445,23 +1445,87 @@ python -m evaluation.datasets.validator
 
 Do not silently modify an existing dataset version when expectations materially change. Create a new file such as `v2.jsonl` and update its metadata.
 
-## Test Retrieval
+## Local Zero-Cost Mode
+
+The current development default is fully local:
+
+```text
+ChatGPT
+↓
+ngrok
+↓
+http://127.0.0.1:8001/mcp
+↓
+Docker Compose MCP container
+↓
+Docker Compose FastAPI container
+↓
+Ollama on the macOS host
+```
+
+Local AI configuration:
+
+```text
+AI_MODE=local
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text
+GENERATION_PROVIDER=ollama
+GENERATION_MODEL=llama3.2
+PLANNER_PROVIDER=ollama
+PLANNER_MODEL=llama3.2
+RERANKER_PROVIDER=disabled
+```
+
+In this mode the app does not require `OPENAI_API_KEY` and does not initialize OpenAI clients. Embeddings use Ollama `/api/embed`, answer generation and planning use Ollama `/api/chat`, and reranking is disabled so Docker does not install `sentence-transformers`, PyTorch, CUDA, or NVIDIA packages.
+
+Run once on the Mac:
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
+ollama pull nomic-embed-text
+ollama pull llama3.2
+ollama ls
+cp .env.example .env
+python -m backend.ingestion.index --reset
+docker compose build --no-cache
+```
+
+Run every time:
+
+```bash
+docker compose up
+./scripts/check_local_mcp.sh
+./scripts/run_ngrok.sh
+```
+
+For native Python commands, use:
+
+```text
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+```
+
+Inside Docker, the API container uses:
+
+```text
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+Test retrieval locally:
+
+```bash
 python -m backend.retrieval.test_retrieval "Can a Brazilian citizen work in Switzerland?"
 ```
 
-The command prints vector results, BM25 results, and the merged candidate list with metadata and scores.
-
-## Test Reranking
+Test reranking schema locally:
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
 python -m backend.reranking.test_reranker "Can a Brazilian citizen work in Switzerland?"
 ```
 
-The command prints merged retrieval candidates followed by reranked results with source file, region, retrieval source, retrieval score, and rerank score.
+With `RERANKER_PROVIDER=disabled`, the reranker preserves the Phase 3 output schema and copies hybrid retrieval scores as rerank scores. This is intentionally lightweight for the first local MCP portfolio test.
+
+ChatGPT connects through ngrok using the HTTPS forwarding URL ending in `/mcp`. Choose no authentication in the ChatGPT MCP app. This is a private local portfolio architecture, not a public multi-user deployment.
+
+`llama3.2` is sufficient for a functional portfolio test, but the generated output remains procedural guidance only and not legal advice.
 
 ## Run Tests
 
