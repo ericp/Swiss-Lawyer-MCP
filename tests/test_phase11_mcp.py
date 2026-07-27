@@ -67,6 +67,35 @@ def _plan() -> dict[str, Any]:
     ).model_dump()
 
 
+def _resolve_schema_ref(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
+    if "$ref" not in node:
+        return node
+    ref = node["$ref"]
+    assert ref.startswith("#/$defs/")
+    return schema["$defs"][ref.removeprefix("#/$defs/")]
+
+
+def _non_null_schema(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
+    for candidate in node.get("anyOf", [node]):
+        if candidate.get("type") != "null":
+            return _resolve_schema_ref(schema, candidate)
+    raise AssertionError("No non-null schema found")
+
+
+def _walk_schema(node: Any) -> list[dict[str, Any]]:
+    if isinstance(node, dict):
+        found = [node]
+        for value in node.values():
+            found.extend(_walk_schema(value))
+        return found
+    if isinstance(node, list):
+        found: list[dict[str, Any]] = []
+        for value in node:
+            found.extend(_walk_schema(value))
+        return found
+    return []
+
+
 class FakeBackendClient:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, Any]] = []
@@ -159,11 +188,13 @@ class FakeBackendClient:
 
 
 def test_mcp_initializes_and_lists_four_tools() -> None:
-    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+    app = create_app(settings=_settings(), backend_client=FakeBackendClient())  # type: ignore[arg-type]
+    client = TestClient(app)
     initialized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
     listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 
     assert initialized.status_code == 200
+    assert app.state.mcp_initialized is True
     assert SERVER_INSTRUCTIONS[:120] in initialized.json()["result"]["instructions"]
     tools = listed.json()["result"]["tools"]
     assert [tool["name"] for tool in tools] == [
@@ -176,6 +207,133 @@ def test_mcp_initializes_and_lists_four_tools() -> None:
     assert "user_id" not in serialized
     assert "external_user_key" not in serialized
     assert next(tool for tool in tools if tool["name"] == "delete_my_swiss_lawyer_data")["annotations"]["destructiveHint"] is True
+
+
+def test_consult_profile_updates_schema_is_explicit_and_described() -> None:
+    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+    listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    consult = next(
+        tool
+        for tool in listed.json()["result"]["tools"]
+        if tool["name"] == "consult_swiss_procedure"
+    )
+    schema = consult["inputSchema"]
+    properties = schema["properties"]
+
+    profile_updates = _non_null_schema(schema, properties["profile_updates"])
+    assert profile_updates["additionalProperties"] is False
+    assert set(profile_updates["properties"]) >= {
+        "nationality",
+        "current_country",
+        "destination_canton",
+        "destination_municipality",
+        "purpose_of_stay",
+        "employment_status",
+        "has_job_offer",
+        "eu_efta_citizen",
+        "marital_status",
+        "family_members",
+        "planned_arrival_date",
+        "current_permit",
+        "age",
+        "studies_status",
+        "additional_context",
+    }
+    assert "description" in profile_updates["properties"]["nationality"]
+    assert "items" in _non_null_schema(schema, profile_updates["properties"]["family_members"])
+    assert "description" in _non_null_schema(schema, profile_updates["properties"]["family_members"])["items"]
+    assert properties["procedure_id"]["description"].startswith("Identifier of an existing saved Swiss Lawyer procedure")
+    assert "Do not invent this value" in properties["procedure_id"]["description"]
+    assert "description" in properties["question"]
+    assert "description" in properties["confirmed_profile_fields"]
+    assert properties["confirmed_profile_fields"]["items"]["enum"]
+    assert "description" in properties["confirmed_profile_fields"]["items"]
+    assert "description" in properties["language"]
+    assert schema["required"] == ["question"]
+
+
+def test_all_mcp_tool_input_schemas_are_specific() -> None:
+    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+    listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    tools = listed.json()["result"]["tools"]
+
+    for tool in tools:
+        schema = tool["inputSchema"]
+        assert schema.get("additionalProperties") is False
+        for field_name, field_schema in schema.get("properties", {}).items():
+            assert field_schema.get("description"), f"{tool['name']}.{field_name} lacks description"
+        free_form_objects = [
+            node
+            for node in _walk_schema(schema)
+            if node.get("type") == "object"
+            and node.get("additionalProperties") is True
+            and not node.get("properties")
+        ]
+        assert free_form_objects == []
+
+
+def test_mcp_accepts_initialized_notification_without_jsonrpc_response() -> None:
+    app = create_app(settings=_settings(), backend_client=FakeBackendClient())  # type: ignore[arg-type]
+    client = TestClient(app)
+
+    initialized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    notification = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+
+    assert initialized.status_code == 200
+    assert notification.status_code == 202
+    assert notification.content == b""
+    assert app.state.mcp_initialized is True
+
+
+def test_mcp_tools_list_and_call_after_initialized_notification() -> None:
+    backend = FakeBackendClient()
+    client = TestClient(create_app(settings=_settings(), backend_client=backend))  # type: ignore[arg-type]
+
+    initialize = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    notification = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+    listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    called = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "consult_swiss_procedure",
+                "arguments": {"question": "Can I move to Zurich for employment?"},
+            },
+        },
+    )
+
+    assert initialize.status_code == 200
+    assert notification.status_code == 202
+    assert listed.status_code == 200
+    assert [tool["name"] for tool in listed.json()["result"]["tools"]] == [
+        "consult_swiss_procedure",
+        "get_my_procedures",
+        "update_my_procedure",
+        "delete_my_swiss_lawyer_data",
+    ]
+    assert called.status_code == 200
+    assert called.json()["result"]["structuredContent"]["state"] == "answered"
+    assert backend.calls[0][0] == "consult"
+
+
+def test_mcp_ping_after_initialized_notification() -> None:
+    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+
+    client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    client.post("/mcp", json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+    ping = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "ping"})
+
+    assert ping.status_code == 200
+    assert ping.json() == {"jsonrpc": "2.0", "id": 2, "result": {}}
 
 
 def test_identity_provider_and_startup_validation() -> None:
@@ -279,6 +437,72 @@ def test_backend_client_headers_errors_and_validation() -> None:
             await malformed_client.get_procedures(external_user_key="fixed", payload=GetMyProceduresInput())
 
     asyncio.run(run())
+
+
+def test_backend_client_maps_public_profile_update_names_to_backend_fields() -> None:
+    captured: dict[str, Any] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            200,
+            json={
+                "user_id": "u1",
+                "procedure_id": "p1",
+                "intent": "immigration",
+                "state": "clarification_required",
+                "needs_clarification": True,
+                "clarification_questions": [],
+                "missing_fields": ["purpose_of_stay"],
+                "sources": [],
+                "insufficient_context": False,
+                "saved_profile_fields": ["intended_canton", "intended_city"],
+                "disclaimer": "info only",
+            },
+        )
+
+    async def run() -> None:
+        settings = _settings(backend_base_url="https://backend.example.com")
+        client = SwissLawyerBackendClient(
+            settings=settings,
+            http_client=httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="https://backend.example.com",
+            ),
+        )
+        await client.consult(
+            external_user_key="fixed",
+            payload=ConsultSwissProcedureInput.model_validate(
+                {
+                    "question": "Can I move?",
+                    "profile_updates": {
+                        "nationality": "Brazilian",
+                        "destination_canton": "Zurich",
+                        "destination_municipality": "Zurich",
+                        "has_job_offer": True,
+                    },
+                    "confirmed_profile_fields": [
+                        "nationality",
+                        "destination_canton",
+                        "destination_municipality",
+                        "has_job_offer",
+                    ],
+                }
+            ),
+        )
+
+    asyncio.run(run())
+
+    assert captured["json"]["profile_updates"]["nationality"] == "Brazilian"
+    assert captured["json"]["profile_updates"]["intended_canton"] == "Zurich"
+    assert captured["json"]["profile_updates"]["intended_city"] == "Zurich"
+    assert captured["json"]["profile_updates"]["employment_status"] == "has Swiss job offer"
+    assert captured["json"]["confirmed_profile_fields"] == [
+        "employment_status",
+        "intended_canton",
+        "intended_city",
+        "nationality",
+    ]
 
 
 def test_internal_fastapi_routes_require_service_token(monkeypatch: pytest.MonkeyPatch) -> None:

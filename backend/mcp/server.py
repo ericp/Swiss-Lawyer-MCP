@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from backend.mcp.backend_client import SwissLawyerBackendClient
@@ -86,13 +86,14 @@ def create_app(
     app.state.rate_limiter = limiter
     app.state.semaphore = semaphore
     app.state.fastmcp_available = FastMCP is not None
+    app.state.mcp_initialized = False
 
     @app.get("/healthz")
     def healthz() -> dict[str, object]:
         return {"status": "ok", "mcp_sdk_available": FastMCP is not None}
 
-    @app.post(settings.path)
-    async def mcp_endpoint(request: Request) -> JSONResponse:
+    @app.post(settings.path, response_model=None)
+    async def mcp_endpoint(request: Request) -> JSONResponse | Response:
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > settings.max_request_bytes:
             return _jsonrpc_error(None, "invalid_request", "Request body is too large.", status_code=413)
@@ -103,7 +104,13 @@ def create_app(
         request_id = payload.get("id")
         method = payload.get("method")
         if method == "initialize":
+            request.app.state.mcp_initialized = True
             return _jsonrpc_result(request_id, _initialize_result(settings))
+        if method == "notifications/initialized":
+            request.app.state.mcp_initialized = True
+            return Response(status_code=202)
+        if method == "ping":
+            return _jsonrpc_result(request_id, {})
         if method == "tools/list":
             return _jsonrpc_result(request_id, {"tools": _tool_definitions()})
         if method == "tools/call":

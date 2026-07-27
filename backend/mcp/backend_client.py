@@ -46,7 +46,7 @@ class SwissLawyerBackendClient:
         payload: ConsultSwissProcedureInput,
         correlation_id: str | None = None,
     ) -> ProcedureQueryResponse:
-        body = payload.model_dump(exclude_none=True)
+        body = _consult_payload_for_backend(payload)
         body["external_user_key"] = external_user_key
         response = await self._request(
             "POST",
@@ -167,3 +167,54 @@ def _validate_response(model: type, payload: dict[str, Any]) -> Any:
         return model.model_validate(payload)
     except ValidationError as error:
         raise InvalidBackendResponseError() from error
+
+
+def _consult_payload_for_backend(payload: ConsultSwissProcedureInput) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True, exclude={"profile_updates", "confirmed_profile_fields"})
+    public_updates = (
+        payload.profile_updates.model_dump(exclude_none=True)
+        if payload.profile_updates is not None
+        else {}
+    )
+    field_map = {
+        "destination_canton": "intended_canton",
+        "destination_municipality": "intended_city",
+        "family_members": "children",
+        "planned_arrival_date": "swiss_residence_start_date",
+        "studies_status": "education",
+    }
+    computed_only_fields = {"has_job_offer", "eu_efta_citizen"}
+    backend_updates = {
+        field_map.get(field_name, field_name): value
+        for field_name, value in public_updates.items()
+        if field_name not in computed_only_fields
+    }
+    if "has_job_offer" in public_updates:
+        existing = str(backend_updates.get("employment_status", "")).strip()
+        marker = "has Swiss job offer" if public_updates["has_job_offer"] else "no Swiss job offer confirmed"
+        backend_updates["employment_status"] = f"{existing}; {marker}" if existing else marker
+    if "eu_efta_citizen" in public_updates:
+        existing_context = str(backend_updates.get("additional_context", "")).strip()
+        marker = (
+            "User says they are an EU/EFTA citizen."
+            if public_updates["eu_efta_citizen"]
+            else "User says they are not an EU/EFTA citizen."
+        )
+        backend_updates["additional_context"] = (
+            f"{existing_context} {marker}" if existing_context else marker
+        )
+    if backend_updates:
+        body["profile_updates"] = backend_updates
+
+    confirmed = [
+        field_map.get(field_name, field_name)
+        for field_name in payload.confirmed_profile_fields
+        if field_map.get(field_name, field_name) in backend_updates
+    ]
+    if "has_job_offer" in payload.confirmed_profile_fields and "employment_status" in backend_updates:
+        confirmed.append("employment_status")
+    if "eu_efta_citizen" in payload.confirmed_profile_fields and "additional_context" in backend_updates:
+        confirmed.append("additional_context")
+    if confirmed:
+        body["confirmed_profile_fields"] = sorted(set(confirmed))
+    return body
