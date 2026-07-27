@@ -159,11 +159,13 @@ class FakeBackendClient:
 
 
 def test_mcp_initializes_and_lists_four_tools() -> None:
-    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+    app = create_app(settings=_settings(), backend_client=FakeBackendClient())  # type: ignore[arg-type]
+    client = TestClient(app)
     initialized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
     listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 
     assert initialized.status_code == 200
+    assert app.state.mcp_initialized is True
     assert SERVER_INSTRUCTIONS[:120] in initialized.json()["result"]["instructions"]
     tools = listed.json()["result"]["tools"]
     assert [tool["name"] for tool in tools] == [
@@ -176,6 +178,70 @@ def test_mcp_initializes_and_lists_four_tools() -> None:
     assert "user_id" not in serialized
     assert "external_user_key" not in serialized
     assert next(tool for tool in tools if tool["name"] == "delete_my_swiss_lawyer_data")["annotations"]["destructiveHint"] is True
+
+
+def test_mcp_accepts_initialized_notification_without_jsonrpc_response() -> None:
+    app = create_app(settings=_settings(), backend_client=FakeBackendClient())  # type: ignore[arg-type]
+    client = TestClient(app)
+
+    initialized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    notification = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+
+    assert initialized.status_code == 200
+    assert notification.status_code == 202
+    assert notification.content == b""
+    assert app.state.mcp_initialized is True
+
+
+def test_mcp_tools_list_and_call_after_initialized_notification() -> None:
+    backend = FakeBackendClient()
+    client = TestClient(create_app(settings=_settings(), backend_client=backend))  # type: ignore[arg-type]
+
+    initialize = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    notification = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+    listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    called = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "consult_swiss_procedure",
+                "arguments": {"question": "Can I move to Zurich for employment?"},
+            },
+        },
+    )
+
+    assert initialize.status_code == 200
+    assert notification.status_code == 202
+    assert listed.status_code == 200
+    assert [tool["name"] for tool in listed.json()["result"]["tools"]] == [
+        "consult_swiss_procedure",
+        "get_my_procedures",
+        "update_my_procedure",
+        "delete_my_swiss_lawyer_data",
+    ]
+    assert called.status_code == 200
+    assert called.json()["result"]["structuredContent"]["state"] == "answered"
+    assert backend.calls[0][0] == "consult"
+
+
+def test_mcp_ping_after_initialized_notification() -> None:
+    client = TestClient(create_app(settings=_settings(), backend_client=FakeBackendClient()))  # type: ignore[arg-type]
+
+    client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    client.post("/mcp", json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+    ping = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "ping"})
+
+    assert ping.status_code == 200
+    assert ping.json() == {"jsonrpc": "2.0", "id": 2, "result": {}}
 
 
 def test_identity_provider_and_startup_validation() -> None:
