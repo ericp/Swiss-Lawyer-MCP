@@ -85,11 +85,17 @@ def _answer(insufficient: bool = False) -> GeneratedAnswer:
     )
 
 
-def _retrieved_chunk() -> RetrievedChunk:
+def _retrieved_chunk(
+    *,
+    chunk_id: str = "chunk-1",
+    source: str = "permit.pdf",
+    region: str = "zh",
+    text: str = "Brazilian citizens may require a permit before working in Switzerland.",
+) -> RetrievedChunk:
     return RetrievedChunk(
-        id="chunk-1",
-        text="Brazilian citizens may require a permit before working in Switzerland.",
-        metadata=ChunkMetadata(source="permit.pdf", page=2, region="ZH"),
+        id=chunk_id,
+        text=text,
+        metadata=ChunkMetadata(source=source, page=2, region=region),
         score=0.8,
         retrieval_source="vector",
     )
@@ -111,17 +117,18 @@ def _reranked_chunks(*, duplicate_source: bool = False) -> list[RerankedChunk]:
 
 
 class FakeHybridRetriever:
-    def __init__(self) -> None:
+    def __init__(self, chunks: list[RetrievedChunk] | None = None) -> None:
         self.called = False
+        self.chunks = chunks
 
     def retrieve(self, query: str, *, top_k: int = 10) -> HybridRetrievalResult:
         self.called = True
-        chunk = _retrieved_chunk()
+        chunks = self.chunks or [_retrieved_chunk()]
         return HybridRetrievalResult(
             query=query,
-            vector_results=[chunk],
+            vector_results=chunks[:top_k],
             bm25_results=[],
-            merged_results=[chunk],
+            merged_results=chunks[:top_k],
         )
 
 
@@ -138,7 +145,20 @@ class FakeReranker:
         top_k: int = 5,
     ) -> RerankResult:
         self.called = True
-        chunks = _reranked_chunks(duplicate_source=self.duplicate_source)[:top_k]
+        if self.duplicate_source:
+            chunks = _reranked_chunks(duplicate_source=True)[:top_k]
+        else:
+            chunks = [
+                RerankedChunk(
+                    chunk_id=chunk.id,
+                    text=chunk.text,
+                    metadata=chunk.metadata,
+                    retrieval_source=chunk.retrieval_source,
+                    retrieval_score=chunk.score,
+                    rerank_score=chunk.score,
+                )
+                for chunk in retrieved_chunks[:top_k]
+            ]
         return RerankResult(
             query=query,
             total_candidates=len(retrieved_chunks),
@@ -282,6 +302,194 @@ def test_successful_pipeline_creates_procedure_and_deduplicates_sources(
     profile = memory_service.build_user_profile(response.user_id)
     assert profile.intended_city == "Zurich"
     assert profile.intended_canton == "ZH"
+
+
+def test_zurich_question_returns_no_unrelated_canton_source(
+    memory_service: MemoryService,
+) -> None:
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(chunk_id="federal", source="federal.pdf", region="federal"),
+                _retrieved_chunk(chunk_id="zh", source="zurich.pdf", region="zh"),
+                _retrieved_chunk(chunk_id="be", source="bern.pdf", region="be"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="zurich-filter-user",
+            question="Can I work in Zurich?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+            ],
+        )
+    )
+
+    assert {source.region for source in response.sources} <= {"federal", "zh"}
+    assert "be" not in {source.region for source in response.sources}
+
+
+def test_bern_question_returns_no_zurich_source(
+    memory_service: MemoryService,
+) -> None:
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(chunk_id="federal", source="federal.pdf", region="federal"),
+                _retrieved_chunk(chunk_id="zh", source="zurich.pdf", region="zh"),
+                _retrieved_chunk(chunk_id="be", source="bern.pdf", region="be"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="bern-filter-user",
+            question="Can I work in Bern?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Bern",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+            ],
+        )
+    )
+
+    assert {source.region for source in response.sources} <= {"federal", "be"}
+    assert "zh" not in {source.region for source in response.sources}
+
+
+def test_bern_question_without_be_source_reports_missing_canton_coverage(
+    memory_service: MemoryService,
+) -> None:
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(chunk_id="federal", source="federal.pdf", region="federal"),
+                _retrieved_chunk(chunk_id="zh", source="zurich.pdf", region="zh"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="bern-no-coverage-user",
+            question="Can I work in Bern?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Bern",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+            ],
+        )
+    )
+
+    assert response.answer is not None
+    assert "zh" not in {source.region for source in response.sources}
+    assert any("BE" in note and "federal information only" in note for note in response.answer.important_notes)
+
+
+def test_explicit_bern_overrides_saved_zurich_profile_data(
+    memory_service: MemoryService,
+) -> None:
+    user = memory_service.get_or_create_user(external_user_key="override-user")
+    memory_service.save_confirmed_profile_facts(
+        user_id=user.id,
+        facts={
+            "nationality": "Australia",
+            "intended_city": "Zurich",
+            "intended_canton": "ZH",
+            "purpose_of_stay": "employment",
+            "employment_status": "has Swiss job offer",
+        },
+        source="user_confirmed",
+    )
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(chunk_id="federal", source="federal.pdf", region="federal"),
+                _retrieved_chunk(chunk_id="zh", source="zurich.pdf", region="zh"),
+                _retrieved_chunk(chunk_id="be", source="bern.pdf", region="be"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            user_id=user.id,
+            question="Actually, I am moving to Bern. What do I need?",
+            profile_updates={"intended_city": "Bern"},
+            confirmed_profile_fields=["intended_city"],
+        )
+    )
+
+    assert {source.region for source in response.sources} <= {"federal", "be"}
+    profile = memory_service.build_user_profile(user.id)
+    assert profile.intended_city == "Bern"
+    assert profile.intended_canton == "BE"
+
+
+def test_federal_sources_remain_available_for_all_canton_queries(
+    memory_service: MemoryService,
+) -> None:
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(chunk_id="federal", source="federal.pdf", region="federal"),
+                _retrieved_chunk(chunk_id="zh", source="zurich.pdf", region="zh"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="geneva-federal-user",
+            question="Can I work in Geneva?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Geneva",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+            ],
+        )
+    )
+
+    assert {source.region for source in response.sources} == {"federal"}
+    assert "zh" not in {source.region for source in response.sources}
 
 
 def test_insufficient_context_does_not_create_plan(
