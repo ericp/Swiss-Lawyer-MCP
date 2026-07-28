@@ -7,12 +7,21 @@ __pycache__/
 venv/
 .env
 .DS_Store
+logs/
 
 data/chromadb/*
 !data/chromadb/.gitkeep
 data/sqlite/*
 !data/sqlite/.gitkeep
+data/documents/*
+!data/documents/.gitkeep
+data/tmp/
+data/pdfs/**/*.pdf
+!data/pdfs/**/.gitkeep
+!data/pdfs/metadata/
+!data/pdfs/metadata/sources.yaml
 
 evaluation/artifacts/*
 !evaluation/artifacts/.gitkeep
-.env.example
+evaluation/reports/*
+!evaluation/reports/.gitkeep

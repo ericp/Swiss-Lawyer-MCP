@@ -13,6 +13,7 @@ from backend.models.clarification import ClarificationQuestion
 from backend.models.memory import SavedProcedure
 from backend.models.planner import ProcedurePlan
 from backend.models.reranking import RerankedChunk
+from backend.models.retrieval import HybridRetrievalResult, RetrievedChunk
 from backend.models.user_profile import UserProfile
 from backend.orchestration.models import (
     ProcedureQueryRequest,
@@ -22,6 +23,7 @@ from backend.orchestration.models import (
 )
 from backend.planners.workflow_planner import WorkflowPlanner
 from backend.retrieval.hybrid import HybridRetriever
+from backend.synchronizer.regions import REGIONS
 
 
 class OrchestrationError(Exception):
@@ -144,6 +146,11 @@ class ProcedureOrchestrator:
             retrieval_query,
             top_k=request.retrieval_top_k or self._default_retrieval_top_k,
         )
+        requested_region = _normalize_canton_region(runtime_profile.intended_canton)
+        retrieval_result = _filter_retrieval_result_by_region(
+            retrieval_result,
+            requested_region=requested_region,
+        )
         rerank_result = self._reranker.rerank(
             query=retrieval_query,
             retrieved_chunks=retrieval_result.merged_results,
@@ -154,6 +161,11 @@ class ProcedureOrchestrator:
             detected_intent=detected_intent,
             user_profile=runtime_profile,
             reranked_chunks=rerank_result.chunks,
+        )
+        answer = _add_missing_canton_coverage_note(
+            answer=answer,
+            requested_region=requested_region,
+            chunks=rerank_result.chunks,
         )
         plan = None
         saved_procedure = existing_procedure
@@ -260,6 +272,35 @@ class ProcedureOrchestrator:
         confirmed_fields: list[str],
         saved_profile_fields: list[str],
     ) -> tuple[UserProfile, list[ClarificationQuestion]]:
+        city_was_updated = bool(profile_updates.get("intended_city"))
+        if city_was_updated:
+            resolution = self._canton_resolver.resolve(profile.intended_city)
+            if resolution.is_resolved and resolution.canton is not None:
+                updates = {
+                    "intended_city": resolution.city,
+                    "intended_canton": resolution.canton,
+                }
+                profile = profile.model_copy(update=updates)
+                if "intended_city" in confirmed_fields:
+                    self._memory_service.save_confirmed_profile_facts(
+                        user_id=user_id,
+                        facts=updates,
+                        source="user_confirmed",
+                    )
+                    for field in updates:
+                        if field not in saved_profile_fields:
+                            saved_profile_fields.append(field)
+                return profile, []
+            if resolution.needs_clarification:
+                return profile, [
+                    ClarificationQuestion(
+                        field="intended_canton",
+                        question=(
+                            "Which Swiss canton should be used for this city or municipality?"
+                        ),
+                    )
+                ]
+
         if profile.intended_canton:
             return profile, []
         if not profile.intended_city:
@@ -351,6 +392,83 @@ def _build_retrieval_query(
             facts.append(f"{field}: {data[field]}")
     context = "; ".join(facts)
     return f"{question}\nIntent: {intent}\nConfirmed context: {context}".strip()
+
+
+def _normalize_canton_region(canton: str | None) -> str | None:
+    if canton is None or not canton.strip():
+        return None
+    normalized = canton.strip().lower()
+    if normalized in REGIONS:
+        return normalized
+    for code, region in REGIONS.items():
+        names = {region.name.lower()}
+        if region.name.lower() == "zurich":
+            names.add("zürich")
+        if normalized in names:
+            return code
+    return None
+
+
+def _filter_retrieval_result_by_region(
+    result: HybridRetrievalResult,
+    *,
+    requested_region: str | None,
+) -> HybridRetrievalResult:
+    if requested_region is None or requested_region == "federal":
+        return result
+    allowed_regions = {"federal", requested_region}
+    return result.model_copy(
+        update={
+            "vector_results": _filter_chunks_by_region(
+                result.vector_results,
+                allowed_regions=allowed_regions,
+            ),
+            "bm25_results": _filter_chunks_by_region(
+                result.bm25_results,
+                allowed_regions=allowed_regions,
+            ),
+            "merged_results": _filter_chunks_by_region(
+                result.merged_results,
+                allowed_regions=allowed_regions,
+            ),
+        }
+    )
+
+
+def _filter_chunks_by_region(
+    chunks: list[RetrievedChunk],
+    *,
+    allowed_regions: set[str],
+) -> list[RetrievedChunk]:
+    return [
+        chunk
+        for chunk in chunks
+        if chunk.metadata.region.strip().lower() in allowed_regions
+    ]
+
+
+def _add_missing_canton_coverage_note(
+    *,
+    answer: Any,
+    requested_region: str | None,
+    chunks: list[RerankedChunk],
+) -> Any:
+    if requested_region is None or requested_region == "federal":
+        return answer
+    has_requested_region = any(
+        chunk.metadata.region.strip().lower() == requested_region
+        for chunk in chunks
+    )
+    if has_requested_region:
+        return answer
+    note = (
+        f"Canton-specific official source coverage for {requested_region.upper()} "
+        "was not found in the retrieved local knowledge base. The answer may include "
+        "federal information only."
+    )
+    if note in answer.important_notes:
+        return answer
+    return answer.model_copy(update={"important_notes": [*answer.important_notes, note]})
 
 
 def _source_references(chunks: list[RerankedChunk]) -> list[SourceReference]:

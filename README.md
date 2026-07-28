@@ -1,359 +1,270 @@
 # Swiss Lawyer MCP
 
-Swiss Lawyer MCP is a production-minded Agentic RAG backend for informational guidance about Swiss immigration and administrative procedures. The system is designed to use official Swiss government sources only, preserve evidence metadata, and expose grounded procedure support to ChatGPT through a local single-user MCP server.
+Swiss Lawyer is a local MCP and RAG application that provides informational guidance about Swiss immigration and administrative procedures using official Swiss sources. It asks for relevant missing details, retrieves evidence from a local knowledge base, generates a grounded answer, and can save procedure progress for later continuation.
 
-This repository currently implements **Phase 1: PDF ingestion**, **Phase 2: hybrid retrieval**, **Phase 3: reranking**, **Phase 4.2: schema-driven clarification**, **Phase 5: grounded answer generation**, **Phase 6: planner/workflow engine**, **Phase 7: SQLite memory**, **Phase 8: FastAPI orchestration**, **Phase 9: official source synchronization**, **Phase 10 Part 1: evaluation module architecture**, **Phase 10 Part 2: versioned evaluation datasets**, **Phase 10 Part 3: automated evaluation metrics**, **Phase 10 Part 4: automated quality regression tests**, **Phase 10 Part 5: evaluation CLI and before/after reports**, and **Phase 11: local single-user MCP integration with Docker, ngrok and ChatGPT Developer Mode**. It does not implement OAuth, Azure infrastructure, Azure DevOps, a frontend, permanent cloud deployment, GitHub Actions scheduling, or mandatory RAGAS evaluation.
+> Swiss Lawyer provides informational guidance only. It is not a lawyer and does not provide legal advice.
 
-## Safety Scope
+## Current coverage
 
-This project is not a legal adviser. It provides informational guidance only and must ground future answers in retrieved official-source evidence.
+The application is designed to support all Swiss cantons, but the current knowledge base is focused on federal procedures and Zurich.
 
-## Folder Structure
+- Federal Swiss sources: partial coverage
+- Canton of Zurich: partial canton-specific coverage
+- Other cantons: architecture supported, but canton-specific source coverage is not yet complete
+
+> For a question about an unsupported canton, Swiss Lawyer may provide supported federal information, but it must clearly state when canton-specific evidence is unavailable. It must never use Zurich-specific authorities as a substitute for another canton.
+
+## How it works
 
 ```text
-Swiss Lawyer MCP/
-├── .env.example
-├── .dockerignore
-├── .gitignore
-├── README.md
-├── alembic.ini
-├── Dockerfile.api
-├── Dockerfile.mcp
-├── docker-compose.yml
-├── migrations/
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions/
-│       ├── 0001_phase_7_memory.py
-│       └── 0002_phase_9_synchronizer.py
-├── pytest.ini
-├── requirements.txt
-├── backend/
-│   ├── __init__.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── app.py
-│   │   ├── dependencies.py
-│   │   ├── error_handlers.py
-│   │   ├── internal_auth.py
-│   │   ├── routes/
-│   │   │   ├── __init__.py
-│   │   │   ├── admin_synchronization.py
-│   │   │   ├── health.py
-│   │   │   ├── internal_mcp.py
-│   │   │   └── procedures.py
-│   │   └── schemas.py
-│   ├── clarification/
-│   │   ├── __init__.py
-│   │   ├── clarification_engine.py
-│   │   ├── intent_classifier.py
-│   │   ├── procedure_schemas.py
-│   │   └── test_clarification.py
-│   ├── generation/
-│   │   ├── __init__.py
-│   │   ├── answer_generator.py
-│   │   ├── confidence.py
-│   │   ├── prompts.py
-│   │   ├── source_attribution.py
-│   │   └── test_generation.py
-│   ├── ingestion/
-│   │   ├── __init__.py
-│   │   ├── chunking.py
-│   │   ├── discovery.py
-│   │   ├── embeddings.py
-│   │   ├── extraction.py
-│   │   ├── index.py
-│   │   └── vector_store.py
-│   ├── location/
-│   │   ├── __init__.py
-│   │   └── canton_resolver.py
-│   ├── memory/
-│   │   ├── __init__.py
-│   │   ├── database.py
-│   │   ├── memory_service.py
-│   │   ├── models.py
-│   │   ├── repositories/
-│   │   │   ├── __init__.py
-│   │   │   ├── converters.py
-│   │   │   ├── interaction_repository.py
-│   │   │   ├── procedure_repository.py
-│   │   │   ├── profile_repository.py
-│   │   │   └── user_repository.py
-│   │   └── test_memory.py
-│   ├── mcp/
-│   │   ├── __init__.py
-│   │   ├── backend_client.py
-│   │   ├── context.py
-│   │   ├── errors.py
-│   │   ├── rate_limit.py
-│   │   ├── schemas.py
-│   │   ├── server.py
-│   │   ├── settings.py
-│   │   ├── identity/
-│   │   │   ├── __init__.py
-│   │   │   ├── base.py
-│   │   │   └── single_user.py
-│   │   └── tools/
-│   │       ├── __init__.py
-│   │       ├── consult.py
-│   │       ├── privacy.py
-│   │       ├── procedures.py
-│   │       └── progress.py
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── chunk.py
-│   │   ├── clarification.py
-│   │   ├── document.py
-│   │   ├── generation.py
-│   │   ├── memory.py
-│   │   ├── planner.py
-│   │   ├── reranking.py
-│   │   ├── retrieval.py
-│   │   └── user_profile.py
-│   ├── orchestration/
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   └── procedure_orchestrator.py
-│   ├── planners/
-│   │   ├── __init__.py
-│   │   ├── prompts.py
-│   │   ├── test_planner.py
-│   │   └── workflow_planner.py
-│   ├── prompts/
-│   │   ├── grounded_answer_system_prompt.txt
-│   │   └── workflow_planner_system_prompt.txt
-│   ├── reranking/
-│   │   ├── __init__.py
-│   │   ├── reranker.py
-│   │   ├── reranking_service.py
-│   │   └── test_reranker.py
-│   ├── retrieval/
-│   │   ├── __init__.py
-│   │   ├── bm25.py
-│   │   ├── hybrid.py
-│   │   ├── test_retrieval.py
-│   │   └── vector.py
-│   ├── synchronizer/
-│   │   ├── __init__.py
-│   │   ├── cli.py
-│   │   ├── discovery.py
-│   │   ├── document_processor.py
-│   │   ├── hashing.py
-│   │   ├── html_extraction.py
-│   │   ├── http_client.py
-│   │   ├── identifiers.py
-│   │   ├── models.py
-│   │   ├── regions.py
-│   │   ├── repository.py
-│   │   ├── source_registry.py
-│   │   └── synchronizer_service.py
-│   └── utils/
-│       ├── __init__.py
-│       └── config.py
-├── data/
-│   ├── chromadb/
-│   │   └── .gitkeep
-│   ├── pdfs/
-│   │   ├── be/
-│   │   ├── federal/
-│   │   ├── ge/
-│   │   ├── metadata/
-│   │   │   └── sources.yaml
-│   │   ├── vd/
-│   │   └── zh/
-│   └── sqlite/
-│       └── .gitkeep
-├── docs/
-│   ├── ngrok-chatgpt-setup.md
-│   └── phase-11-mcp.md
-├── evaluation/
-│   ├── __init__.py
-│   ├── cli.py
-│   ├── config.py
-│   ├── models.py
-│   ├── runner.py
-│   ├── adapters/
-│   │   ├── __init__.py
-│   │   ├── clarification_adapter.py
-│   │   ├── common.py
-│   │   ├── end_to_end_adapter.py
-│   │   ├── generation_adapter.py
-│   │   ├── planner_adapter.py
-│   │   ├── reranking_adapter.py
-│   │   └── retrieval_adapter.py
-│   ├── artifacts/
-│   ├── baselines/
-│   │   ├── README.md
-│   │   ├── clarification_v1.json
-│   │   ├── end_to_end_v1.json
-│   │   ├── generation_v1.json
-│   │   ├── planning_v1.json
-│   │   ├── retrieval_v1.json
-│   │   └── smoke_v1.json
-│   ├── comparison/
-│   │   ├── __init__.py
-│   │   ├── comparator.py
-│   │   ├── formatter.py
-│   │   └── models.py
-│   ├── datasets/
-│   │   ├── README.md
-│   │   ├── __init__.py
-│   │   ├── loader.py
-│   │   ├── validator.py
-│   │   ├── schemas/
-│   │   │   └── evaluation_case.schema.json
-│   │   ├── smoke/
-│   │   │   └── v1.jsonl
-│   │   ├── clarification/
-│   │   │   └── v1.jsonl
-│   │   ├── retrieval/
-│   │   │   └── v1.jsonl
-│   │   ├── generation/
-│   │   │   └── v1.jsonl
-│   │   ├── planning/
-│   │   │   └── v1.jsonl
-│   │   ├── end_to_end/
-│   │   │   └── v1.jsonl
-│   │   └── fixtures/
-│   ├── metrics/
-│   │   ├── __init__.py
-│   │   ├── abstention.py
-│   │   ├── aggregate.py
-│   │   ├── base.py
-│   │   ├── citations.py
-│   │   ├── clarification.py
-│   │   ├── generation.py
-│   │   ├── latency.py
-│   │   ├── optional_ragas.py
-│   │   ├── planning.py
-│   │   ├── reranking.py
-│   │   └── retrieval.py
-│   ├── regression/
-│   │   ├── __init__.py
-│   │   ├── baseline_service.py
-│   │   ├── baselines.py
-│   │   ├── checker.py
-│   │   ├── fingerprint.py
-│   │   ├── models.py
-│   │   ├── thresholds.py
-│   │   └── thresholds.yaml
-│   └── reports/
-├── notebooks/
-├── scripts/
-│   ├── check_local_mcp.sh
-│   └── run_ngrok.sh
-└── tests/
-    ├── evaluation/
-    │   ├── test_datasets.py
-    │   ├── test_evaluation_module.py
-    │   └── test_metrics.py
-    ├── comparison/
-    │   └── test_cli_and_reports.py
-    ├── regression/
-    │   ├── conftest.py
-    │   ├── helpers.py
-    │   ├── test_citation_quality.py
-    │   ├── test_clarification_quality.py
-    │   ├── test_generation_safety.py
-    │   ├── test_planner_quality.py
-    │   ├── test_retrieval_quality.py
-    │   └── test_smoke_quality.py
-    ├── test_answer_generator.py
-    ├── test_bm25_retrieval.py
-    ├── test_clarification_engine.py
-    ├── test_chunking.py
-    ├── test_discovery.py
-    ├── test_embeddings.py
-    ├── test_extraction.py
-    ├── test_generation_models.py
-    ├── test_generation_prompts.py
-    ├── test_hybrid_retrieval.py
-    ├── test_index.py
-    ├── test_intent_classifier.py
-    ├── test_memory_service.py
-    ├── test_phase11_mcp.py
-    ├── test_phase8_api_orchestration.py
-    ├── test_phase9_synchronizer.py
-    ├── test_planner_models.py
-    ├── test_reranker.py
-    ├── test_reranking_models.py
-    ├── test_reranking_service.py
-    ├── test_retrieval_models.py
-    ├── test_source_attribution.py
-    ├── test_user_profile.py
-    ├── test_vector_retrieval.py
-    ├── test_vector_store.py
-    └── test_workflow_planner.py
+Official sources configured in sources.yaml
+↓
+Enabled remote sources are downloaded; local seed sources are indexed
+↓
+User asks a question through ChatGPT
+↓
+Swiss Lawyer detects the procedure and relevant canton
+↓
+It searches the local official-source knowledge base
+↓
+It returns a grounded answer, sources, and procedure steps
 ```
 
-Phase 1 ingestion through Phase 10 Part 5 evaluation CLI and before/after reports are implemented right now. Generated folders such as `__pycache__/`, `.pytest_cache/`, `.venv/`, generated ChromaDB files, generated evaluation artifacts, synchronized normalized webpage files, temporary downloads, and the generated SQLite database are intentionally omitted from this tree.
+`data/pdfs/metadata/sources.yaml` is the project's approved source list. It tells the synchronizer which official government PDFs and webpages may be downloaded and indexed.
 
-The `data/pdfs/` directory contains regional subfolders such as `federal`, `zh`, `ge`, `vd`, and `be`. The ingestion pipeline uses each PDF's parent folder as its region metadata.
+During first-time setup, enabled official remote sources are downloaded to the developer's machine and indexed in ChromaDB. They are not downloaded again for every question. The current demo seed PDFs are local-only entries, so bootstrap indexes them from the repository's local seed files instead of downloading them from remote URLs.
 
-## Setup
+## Prerequisites
 
-Use Python 3.12.
+Before starting, install:
+
+- Git
+- Docker Desktop or Docker Engine with Docker Compose
+- Ollama
+- Python 3, used by the setup scripts and local development tools
+- ngrok, only when connecting the local MCP to ChatGPT through a public HTTPS URL
+
+Plan for roughly 5-10 GB of free disk space. Most of that is Docker images and Ollama models, not the official documents.
+
+## First-time setup
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+git clone <repository-url>
+cd <repository-directory>
+./scripts/bootstrap_local.sh
 ```
 
-Export `OPENAI_API_KEY` in your shell before running ingestion. The `.env.example` file documents the expected variables for local setup.
+The bootstrap script checks Docker and Ollama, downloads missing Ollama models, creates the local environment configuration, downloads enabled official remote sources from `sources.yaml`, builds the local ChromaDB index, starts the API and MCP services, and runs health checks.
 
-## Environment Variables
+No OpenAI API key is required in local mode. Developers do not need to download PDFs manually. Only enabled and valid remote sources configured in `sources.yaml` are downloaded. The script does not automatically download information for every Swiss canton unless those sources are present in `sources.yaml`.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | empty | Required for OpenAI embeddings |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
-| `PDF_ROOT` | `data/pdfs` | Root folder scanned recursively for PDFs |
-| `CHROMA_PATH` | `data/chromadb` | Persistent ChromaDB storage path |
-| `CHROMA_COLLECTION` | `swiss_procedures` | ChromaDB collection name |
-| `CHUNK_SIZE_WORDS` | `600` | Chunk size in words |
-| `CHUNK_OVERLAP_WORDS` | `100` | Word overlap between adjacent chunks |
-| `RETRIEVAL_TOP_K` | `10` | Default number of candidates returned by each retrieval method |
-| `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Local Sentence Transformers CrossEncoder model |
-| `RERANK_TOP_K` | `5` | Number of reranked chunks selected from merged candidates |
-| `OPENAI_GENERATION_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for grounded answer generation |
-| `OPENAI_PLANNER_MODEL` | `gpt-4o-mini` | OpenAI GPT model used for workflow planning |
-| `ENVIRONMENT` | `development` | Runtime environment label |
-| `API_HOST` | `0.0.0.0` | FastAPI bind host inside Docker |
-| `API_PORT` | `8000` | Local FastAPI port |
-| `SQLITE_DATABASE_URL` | `sqlite:///data/sqlite/memory.db` | SQLAlchemy database URL for user memory |
-| `REQUEST_TIMEOUT_SECONDS` | `60` | Request timeout budget for API clients and future callers |
-| `LOG_LEVEL` | `INFO` | API logging level |
-| `MCP_SERVER_NAME` | `Swiss Lawyer` | MCP server display name |
-| `MCP_SERVER_VERSION` | `1.0.0` | MCP server version |
-| `MCP_HOST` | `0.0.0.0` | MCP bind host inside Docker |
-| `MCP_PORT` | `8001` | MCP container port |
-| `MCP_PATH` | `/mcp` | Streamable HTTP MCP path |
-| `MCP_AUTH_MODE` | `single_user` | Fixed local identity mode |
-| `MCP_SINGLE_USER_KEY` | placeholder | Fixed server-side local memory identity |
-| `MCP_PUBLIC_BASE_URL` | empty | Optional external ngrok base URL |
-| `SWISS_LAWYER_API_BASE_URL` | `http://api:8000` | Internal FastAPI URL used by MCP |
-| `INTERNAL_SERVICE_TOKEN` | placeholder | Internal MCP-to-FastAPI service token |
-| `MCP_BACKEND_TIMEOUT_SECONDS` | `90` | MCP-to-FastAPI timeout |
-| `MCP_MAX_QUESTION_LENGTH` | `10000` | Maximum question length accepted by MCP |
-| `MCP_MAX_PROFILE_FIELDS` | `50` | Maximum profile field count accepted by MCP |
-| `MCP_MAX_PROGRESS_NOTE_LENGTH` | `5000` | Maximum progress note length accepted by MCP |
-| `MCP_RATE_LIMIT_REQUESTS_PER_MINUTE` | `30` | Per-process local MCP request limit |
-| `NGROK_DOMAIN` | empty | Optional reserved ngrok domain |
-| `ENABLE_SYNC_ADMIN_ENDPOINTS` | `false` | Enables development-only synchronization admin endpoints |
-| `SYNC_SOURCE_REGISTRY_PATH` | `data/pdfs/metadata/sources.yaml` | Curated source registry path |
-| `SYNC_PDF_PATH` | `data/pdfs` | Local storage root for synchronized PDFs |
-| `SYNC_DOCUMENT_PATH` | `data/documents` | Local storage root for normalized webpage documents |
-| `SYNC_TEMP_DOWNLOAD_PATH` | `data/tmp/synchronizer` | Temporary download location |
-| `SYNC_HTTP_TIMEOUT_SECONDS` | `30` | HTTP timeout for synchronization requests |
-| `SYNC_MAX_DOCUMENT_BYTES` | `20000000` | Maximum downloaded document size |
-| `SYNC_RETRY_COUNT` | `2` | Retry count for temporary HTTP failures |
-| `SYNC_RETRY_BACKOFF_SECONDS` | `0.25` | Exponential retry backoff base |
-| `SYNC_USER_AGENT` | `Swiss Lawyer MCP Synchronizer/0.9` | Synchronizer HTTP user agent |
-| `SYNC_RETAIN_UNAVAILABLE_SOURCES` | `true` | Retain last valid indexed version when a source is unavailable |
-| `SYNC_CANDIDATE_DISCOVERY_ENABLED` | `true` | Enable candidate discovery commands |
-| `SYNC_WEBPAGE_MIN_CONTENT_CHARS` | `100` | Minimum extracted webpage content target |
+## Connect to ChatGPT
+
+1. Start ngrok:
+
+```bash
+./scripts/run_ngrok.sh
+```
+
+2. Copy the HTTPS forwarding URL displayed by ngrok.
+
+3. Add `/mcp` to the end:
+
+```text
+https://example.ngrok-free.app/mcp
+```
+
+4. In ChatGPT, create or configure the custom MCP connection using:
+
+- URL: the ngrok HTTPS URL ending in `/mcp`
+- Authentication: No authentication
+
+5. Confirm that ChatGPT discovers these four tools:
+
+- `consult_swiss_procedure`
+- `get_my_procedures`
+- `update_my_procedure`
+- `delete_my_swiss_lawyer_data`
+
+Keep Docker, Ollama, and ngrok running while using the MCP through ChatGPT.
+
+> The ngrok endpoint is publicly reachable while the tunnel is running. This setup uses a single local identity and no user authentication, so it is suitable only for private testing and portfolio demonstrations.
+
+Do not expose FastAPI port `8000` or Ollama port `11434`.
+
+## Use the MCP
+
+### Ask about a Zurich employment procedure
+
+```text
+I am an Australian citizen and I have received a job offer in Zurich. What do I need to do to work there legally?
+```
+
+### Continue a procedure
+
+```text
+Show my saved procedures and continue the active one.
+```
+
+### Update progress
+
+```text
+I have now registered with the municipality. Update my procedure.
+```
+
+The application may ask clarification questions before answering when nationality, canton, employment status, permit status, dates, or other legally relevant details are missing.
+
+Canton-specific questions outside Zurich may have incomplete coverage. The application should say so instead of using Zurich-specific information.
+
+## Start it again later
+
+```bash
+./scripts/start_local.sh
+```
+
+This starts the existing local services without redownloading documents or rebuilding the knowledge base.
+
+To rebuild Docker images and start:
+
+```bash
+./scripts/start_local.sh --build
+```
+
+Do not run bootstrap every time.
+
+## Stop
+
+```bash
+./scripts/stop_local.sh
+```
+
+This stops the Docker services but preserves downloaded sources, ChromaDB, SQLite memory, and Ollama models.
+
+## Important limitations
+
+- Current official-source coverage is partial.
+- Zurich is currently the only canton with confirmed canton-specific source coverage.
+- Other cantons need their own verified official sources added to `sources.yaml` before canton-specific answers can be complete.
+- Bootstrap downloads all enabled remote sources currently configured in `sources.yaml`. Local-only or disabled entries are not downloaded.
+- Documents are synchronized and indexed locally; they are not downloaded again for every question.
+- Local mode uses Ollama and does not call OpenAI.
+- The MCP server uses no user authentication and one fixed local identity.
+- This setup is for private local testing and portfolio demonstration, not public multi-user production.
+
+
+## Refresh official sources
+
+```bash
+docker compose exec api python -m backend.synchronizer.cli sync --all
+```
+
+This checks the enabled official sources in `sources.yaml` and updates local copies when they have changed.
+
+For a full reindex:
+
+```bash
+docker compose exec api python -m backend.ingestion.index --reset
+```
+
+A full reindex is normally unnecessary unless sources or embedding configuration changed.
+
+## Simple troubleshooting
+
+### Docker is not running
+
+Open Docker Desktop and wait until the Docker engine is ready.
+
+### Ollama is not running
+
+Open Ollama or start its local service, then check:
+
+```bash
+ollama list
+```
+
+### ChatGPT cannot connect
+
+Confirm:
+
+- Docker services are running
+- ngrok is running
+- the configured URL ends in `/mcp`
+- the MCP health check passes
+
+Run:
+
+```bash
+./scripts/check_local_mcp.sh
+```
+
+### The answer references the wrong canton
+
+This is a bug. The application must use federal sources plus the requested canton and never another canton as a fallback.
+
+## Technical documentation
+
+The sections below describe the internals for developers who want to modify or extend the project.
+
+## Local configuration
+
+Default local mode:
+
+```env
+AI_MODE=local
+
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text
+
+GENERATION_PROVIDER=ollama
+GENERATION_MODEL=llama3.2
+
+PLANNER_PROVIDER=ollama
+PLANNER_MODEL=llama3.2
+
+RERANKER_PROVIDER=disabled
+
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_TIMEOUT_SECONDS=180
+
+MCP_AUTH_MODE=single_user
+MCP_SINGLE_USER_KEY=<generated-local-secret>
+INTERNAL_SERVICE_TOKEN=<different-generated-local-secret>
+```
+
+Inside Docker, the API uses:
+
+```text
+http://host.docker.internal:11434
+```
+
+Optional OpenAI provider settings remain in `.env.example` for future experimentation only. They are unused in `AI_MODE=local`, require separate OpenAI billing if enabled intentionally, and are not required for normal local setup.
+
+## Source registry status
+
+Real status of `data/pdfs/metadata/sources.yaml` right now:
+
+- total registry entries: `9`
+- enabled remote sources: `0`
+- enabled remote PDF sources: `0`
+- enabled webpage sources: `0`
+- enabled landing-page sources: `0`
+- regions with confirmed source coverage: `federal`, `zh`
+- canton-specific coverage currently confirmed: Zurich only
+- local-only entries: `9`
+
+Local-only entries:
+
+- `seed_federal_b_permit_gainful_activity`
+- `seed_federal_b_permit_sem`
+- `seed_federal_citizenship_overview`
+- `seed_federal_family_reunification`
+- `seed_federal_free_movement_eu_efta`
+- `seed_federal_residence_permits_overview`
+- `seed_federal_without_gainful_activity`
+- `seed_zh_driving_licence_exchange`
+- `seed_zh_registration_zurich`
+
+Bootstrap can download enabled remote sources when they exist. With the current registry, the remote-download count is zero; bootstrap validates the registry, records local-only seed sources, and indexes the existing local seed PDFs.
 
 ## Storage Roles
 
@@ -367,17 +278,18 @@ Keeping these stores separate prevents user memory from mixing with the legal/pr
 ## Run Ingestion
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
-python -m backend.ingestion.index
+python -m backend.ingestion.index --reset
 ```
 
-The command scans `data/pdfs/`, extracts text page by page with PyMuPDF, chunks extracted text, generates OpenAI embeddings, and writes the chunks into the persistent ChromaDB collection `swiss_procedures`.
+The command scans `data/pdfs/`, extracts text page by page with PyMuPDF, chunks extracted text, generates Ollama embeddings with `nomic-embed-text`, and writes the chunks into the model-specific ChromaDB collection, for example `swiss_lawyer__ollama__nomic_embed_text`.
+
+The `--reset` flag deletes and recreates only the currently selected ChromaDB collection. It does not delete PDFs, SQLite memory, synchronization metadata, or unrelated ChromaDB collections.
 
 ## Hybrid Retrieval
 
 Phase 2 retrieves candidate chunks from the existing ChromaDB collection using two methods:
 
-- **Vector search** embeds the user question with `text-embedding-3-small` and queries ChromaDB for semantically similar chunks.
+- **Vector search** embeds the user question with the configured embedding provider. In default local mode this is Ollama `nomic-embed-text`.
 - **BM25 keyword search** loads all stored ChromaDB chunks, tokenizes their text, builds a `rank-bm25` index, and scores chunks against the user's query terms.
 
 The `HybridRetriever` runs both methods, merges the results, removes duplicate chunk IDs, and preserves retrieval source information. It does not rerank and does not generate answers.
@@ -386,7 +298,7 @@ The `HybridRetriever` runs both methods, merges the results, removes duplicate c
 
 Hybrid retrieval is good at recall: vector search can find semantically similar chunks, while BM25 can catch exact keyword matches. It can still return candidates that are only loosely related to the question. Reranking improves precision by scoring each merged candidate directly against the question.
 
-Phase 3 uses a local Sentence Transformers CrossEncoder:
+Phase 3 can use a local Sentence Transformers CrossEncoder:
 
 ```text
 cross-encoder/ms-marco-MiniLM-L-6-v2
@@ -398,7 +310,7 @@ For each candidate, the reranker scores the pair:
 (question, chunk text)
 ```
 
-The reranker sorts candidates by CrossEncoder relevance score and keeps the top results. It does not call external APIs and does not generate answers.
+The default local developer setup uses `RERANKER_PROVIDER=disabled` so Docker stays lightweight and does not install PyTorch, CUDA/NVIDIA packages, or `sentence-transformers`. In disabled mode, the system preserves the reranking result schema and uses hybrid retrieval ordering/scores. CrossEncoder reranking remains available only if the optional provider and dependencies are intentionally installed later.
 
 The current architecture is:
 
@@ -473,7 +385,7 @@ Reranker
 Grounded Answer Generation
 ```
 
-Grounded generation uses a reusable system prompt stored in `backend/prompts/grounded_answer_system_prompt.txt`. The prompt instructs the GPT model to answer only from supplied official context, never invent rules, documents, deadlines, authorities, or procedures, and explicitly say when retrieved context is insufficient.
+Grounded generation uses a reusable system prompt stored in `backend/prompts/grounded_answer_system_prompt.txt`. In default local mode, `llama3.2` runs through Ollama `/api/chat`. The prompt instructs the model to answer only from supplied official context, never invent rules, documents, deadlines, authorities, or procedures, and explicitly say when retrieved context is insufficient.
 
 The generated answer is structured as:
 
@@ -485,7 +397,7 @@ The generated answer is structured as:
 - deterministic confidence label
 - insufficient-context flag
 
-If no reranked context is available, the generator does not call OpenAI. It returns:
+If no reranked context is available, the generator does not call a model. It returns:
 
 ```text
 The retrieved official documentation does not contain enough information to answer this question completely.
@@ -508,7 +420,6 @@ This keeps confidence tied to evidence quality rather than model tone.
 ## Test Generation
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
 python -m backend.generation.test_generation \
   "Can a Brazilian citizen work in Switzerland?" \
   --profile-json '{"nationality":"Brazil","employment_status":"Swiss job offer","purpose_of_stay":"work","intended_canton":"Zurich"}'
@@ -565,7 +476,6 @@ These statuses prepare the project for SQLite memory in Phase 7 because a future
 ## Test Planner
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
 python -m backend.planners.test_planner
 ```
 
@@ -763,14 +673,7 @@ Authorization: Bearer <INTERNAL_SERVICE_TOKEN>
 
 This authenticates the MCP container to the private FastAPI route group. It is not user authentication.
 
-Normal local workflow:
-
-```bash
-cp .env.example .env
-docker compose up --build
-./scripts/check_local_mcp.sh
-./scripts/run_ngrok.sh
-```
+Use `./scripts/bootstrap_local.sh` for first-time setup, `./scripts/start_local.sh` for normal startup, and `./scripts/run_ngrok.sh` only when you want to expose the local MCP endpoint temporarily to ChatGPT Developer Mode.
 
 Use MCP Inspector locally at:
 
@@ -796,7 +699,7 @@ See [docs/phase-11-mcp.md](docs/phase-11-mcp.md) and [docs/ngrok-chatgpt-setup.m
 
 ### Endpoints
 
-- `GET /health`: checks application, SQLite, ChromaDB, and OpenAI configuration availability.
+- `GET /health`: checks application, SQLite, ChromaDB, and the configured local or optional remote AI provider availability.
 - `POST /v1/procedures/query`: runs the clarification-first procedure workflow.
 - `GET /v1/users/{user_id}/procedures`: lists saved procedures, with optional status, intent, active-only, limit, and offset filters.
 - `GET /v1/procedures/{procedure_id}?user_id=...`: reads one saved procedure with recent interaction summaries.
@@ -895,15 +798,15 @@ FastAPI orchestration
 Grounded answers
 ```
 
-### Supported Regions
+### Supported Region Definitions
 
-The synchronizer supports `federal` plus all 26 Swiss cantons:
+The synchronizer's region registry includes `federal` plus all 26 Swiss canton codes, so more canton sources can be added later:
 
 ```text
 ag ai ar be bl bs fr ge gl gr ju lu ne nw ow sg sh so sz tg ti ur vd vs zg zh
 ```
 
-Region names and approved government domains live centrally in `backend/synchronizer/regions.py`. Domain rules are not scattered across the codebase.
+Region names and approved government domains live centrally in `backend/synchronizer/regions.py`. Domain rules are not scattered across the codebase. This is registry support, not a claim that the current knowledge base already has canton-specific documents for every canton.
 
 ### Source Registry
 
@@ -943,6 +846,16 @@ sources:
 ```
 
 Remote `pdf`, `webpage`, and `landing_page` entries must use HTTPS and pass the region/domain allowlist. Existing manually collected PDFs are preserved as disabled `local_only` seed entries with `local://` URLs and TODO notes instead of fabricated official URLs.
+
+Current registry viability:
+
+- total registry entries: `9`
+- enabled remote PDF entries: `0`
+- enabled webpage entries: `0`
+- enabled landing-page entries: `0`
+- local-only seed entries: `9`
+
+That means the current clone contains the demo seed PDFs needed to build the local portfolio knowledge base, while the registry is already structured for future verified official URLs. `./scripts/bootstrap_local.sh` still runs registry validation and synchronization. With the current registry, synchronization records the manually seeded sources and does not download remote documents. When verified HTTPS government URLs are added and enabled, bootstrap will download those sources locally without hard-coding URLs in shell scripts.
 
 ### Approved Domain Policy
 
@@ -1445,7 +1358,7 @@ python -m evaluation.datasets.validator
 
 Do not silently modify an existing dataset version when expectations materially change. Create a new file such as `v2.jsonl` and update its metadata.
 
-## Local Zero-Cost Mode
+## Local Mode Details
 
 The current development default is fully local:
 
@@ -1478,24 +1391,7 @@ RERANKER_PROVIDER=disabled
 
 In this mode the app does not require `OPENAI_API_KEY` and does not initialize OpenAI clients. Embeddings use Ollama `/api/embed`, answer generation and planning use Ollama `/api/chat`, and reranking is disabled so Docker does not install `sentence-transformers`, PyTorch, CUDA, or NVIDIA packages.
 
-Run once on the Mac:
-
-```bash
-ollama pull nomic-embed-text
-ollama pull llama3.2
-ollama ls
-cp .env.example .env
-python -m backend.ingestion.index --reset
-docker compose build --no-cache
-```
-
-Run every time:
-
-```bash
-docker compose up
-./scripts/check_local_mcp.sh
-./scripts/run_ngrok.sh
-```
+Use the setup and startup scripts from the Quick Start section at the top of this README.
 
 For native Python commands, use:
 
