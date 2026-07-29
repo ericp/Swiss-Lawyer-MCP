@@ -21,6 +21,7 @@ PROCEDURE_ID_DESCRIPTION = (
 LANGUAGE_PATTERN = re.compile(r"^[a-z]{2}(-[A-Z]{2})?$")
 ProfileFieldName = Literal[
     "nationality",
+    "citizenships",
     "current_country",
     "destination_canton",
     "destination_municipality",
@@ -60,12 +61,24 @@ class ProfileUpdates(StrictModel):
     nationality: str | None = Field(
         default=None,
         max_length=120,
-        description="User's nationality or citizenship, for example 'Spanish' or 'Brazilian'.",
+        description=(
+            "Country of citizenship relevant to the procedure, for example "
+            "'Spanish' or 'Brazilian'. Do not use this field for the country "
+            "where the user merely lives."
+        ),
+    )
+    citizenships: list[Annotated[str, Field(min_length=1, max_length=120)]] | None = Field(
+        default=None,
+        max_length=5,
+        description=(
+            "All countries of citizenship when the user has more than one nationality. "
+            "Use this only for citizenships, not residence countries."
+        ),
     )
     current_country: str | None = Field(
         default=None,
         max_length=120,
-        description="Country where the user currently lives.",
+        description="Country where the user currently resides. This does not determine citizenship.",
     )
     destination_canton: str | None = Field(
         default=None,
@@ -99,7 +112,10 @@ class ProfileUpdates(StrictModel):
     )
     eu_efta_citizen: bool | None = Field(
         default=None,
-        description="Whether the user is a citizen of an EU or EFTA country.",
+        description=(
+            "User-stated EU/EFTA citizenship flag. The backend derives the authoritative "
+            "category from the normalized citizenship and ignores contradictions."
+        ),
     )
     marital_status: str | None = Field(
         default=None,

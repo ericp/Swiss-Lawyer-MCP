@@ -168,12 +168,24 @@ class FakeReranker:
 
 
 class FakeAnswerGenerator:
-    def __init__(self, *, insufficient: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        insufficient: bool = False,
+        answer: GeneratedAnswer | None = None,
+    ) -> None:
         self.insufficient = insufficient
+        self.answer = answer
         self.called = False
+        self.user_profile: Any | None = None
 
     def generate(self, **kwargs: Any) -> GeneratedAnswer:
         self.called = True
+        self.user_profile = kwargs.get("user_profile")
+        if not kwargs.get("reranked_chunks"):
+            return _answer(insufficient=True)
+        if self.answer is not None:
+            return self.answer
         return _answer(insufficient=self.insufficient)
 
 
@@ -265,7 +277,11 @@ def test_confirmed_profile_updates_persist_and_unconfirmed_updates_do_not(
     )
 
     facts = memory_service.list_profile_facts(confirmed.user_id)
-    assert {fact.field_name: fact.value for fact in facts} == {"nationality": "Brazil"}
+    stored = {fact.field_name: fact.value for fact in facts}
+    assert stored["nationality"] == "Brazil"
+    assert stored["country_code"] == "BR"
+    assert stored["nationality_category"] == "third_country"
+    assert stored["eu_efta_citizen"] is False
 
 
 def test_successful_pipeline_creates_procedure_and_deduplicates_sources(
@@ -490,6 +506,326 @@ def test_federal_sources_remain_available_for_all_canton_queries(
 
     assert {source.region for source in response.sources} == {"federal"}
     assert "zh" not in {source.region for source in response.sources}
+
+
+def test_australian_zurich_job_offer_does_not_use_eu_efta_guidance(
+    memory_service: MemoryService,
+) -> None:
+    answer_generator = FakeAnswerGenerator()
+    orchestrator = _orchestrator(
+        memory_service,
+        answer_generator=answer_generator,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(
+                    chunk_id="eu",
+                    source="free_movement_eu_efta.pdf",
+                    region="federal",
+                    text="EU/EFTA citizens benefit from free movement.",
+                ),
+                _retrieved_chunk(
+                    chunk_id="zh",
+                    source="registration_zurich.pdf",
+                    region="zh",
+                    text="Zurich registration information.",
+                ),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="australian-job-user",
+            question=(
+                "I'm an Australian citizen. I have an indefinite job offer in Zurich "
+                "and want to stay for more than one year."
+            ),
+            profile_updates={
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert answer_generator.user_profile.country_code == "AU"
+    assert answer_generator.user_profile.nationality_category == "third_country"
+    assert answer_generator.user_profile.eu_efta_citizen is False
+    assert {source.source for source in response.sources} == {"registration_zurich.pdf"}
+    assert "free_movement_eu_efta.pdf" not in {source.source for source in response.sources}
+    assert response.answer is not None
+    assert "EU/EFTA citizen" not in response.answer.answer
+    assert "free movement" not in response.answer.answer.lower()
+
+
+def test_spanish_zurich_job_offer_may_use_eu_efta_evidence(
+    memory_service: MemoryService,
+) -> None:
+    answer_generator = FakeAnswerGenerator()
+    orchestrator = _orchestrator(
+        memory_service,
+        answer_generator=answer_generator,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(
+                    chunk_id="eu",
+                    source="free_movement_eu_efta.pdf",
+                    region="federal",
+                    text="EU/EFTA citizens benefit from free movement.",
+                ),
+                _retrieved_chunk(chunk_id="zh", source="registration_zurich.pdf", region="zh"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="spanish-job-user",
+            question="I'm a Spanish citizen with a job offer in Zurich.",
+            profile_updates={
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert answer_generator.user_profile.country_code == "ES"
+    assert answer_generator.user_profile.nationality_category == "eu_efta"
+    assert answer_generator.user_profile.eu_efta_citizen is True
+    assert "free_movement_eu_efta.pdf" in {source.source for source in response.sources}
+
+
+def test_brazilian_zurich_job_offer_does_not_get_eu_efta_answer(
+    memory_service: MemoryService,
+) -> None:
+    bad_answer = _answer().model_copy(
+        update={
+            "answer": "As an EU/EFTA citizen, you benefit from free movement.",
+            "explanation": "EU/EFTA registration rules apply.",
+        }
+    )
+    orchestrator = _orchestrator(
+        memory_service,
+        answer_generator=FakeAnswerGenerator(answer=bad_answer),
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(
+                    chunk_id="eu",
+                    source="free_movement_eu_efta.pdf",
+                    region="federal",
+                ),
+                _retrieved_chunk(chunk_id="zh", source="registration_zurich.pdf", region="zh"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="brazilian-job-user",
+            question="I'm a Brazilian citizen with a job offer in Zurich.",
+            profile_updates={
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["intended_city", "purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert response.state is ProcedureResponseState.INSUFFICIENT_CONTEXT
+    assert response.answer is not None
+    assert "third_country" in response.answer.answer
+
+
+def test_saved_spanish_profile_current_australian_statement_wins(
+    memory_service: MemoryService,
+) -> None:
+    user = memory_service.get_or_create_user(external_user_key="nationality-override-user")
+    memory_service.save_confirmed_profile_facts(
+        user_id=user.id,
+        facts={
+            "nationality": "Spain",
+            "country_code": "ES",
+            "nationality_category": "eu_efta",
+            "eu_efta_citizen": True,
+            "intended_city": "Zurich",
+            "intended_canton": "ZH",
+            "purpose_of_stay": "employment",
+            "employment_status": "has Swiss job offer",
+        },
+        source="user_confirmed",
+    )
+    answer_generator = FakeAnswerGenerator()
+    orchestrator = _orchestrator(
+        memory_service,
+        answer_generator=answer_generator,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(
+                    chunk_id="eu",
+                    source="free_movement_eu_efta.pdf",
+                    region="federal",
+                ),
+                _retrieved_chunk(chunk_id="zh", source="registration_zurich.pdf", region="zh"),
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            user_id=user.id,
+            question="I'm an Australian citizen and want to work in Zurich legally.",
+        )
+    )
+
+    assert answer_generator.user_profile.country_code == "AU"
+    assert answer_generator.user_profile.nationality_category == "third_country"
+    assert answer_generator.user_profile.eu_efta_citizen is False
+    assert "free_movement_eu_efta.pdf" not in {source.source for source in response.sources}
+
+
+def test_conflicting_eu_efta_boolean_loses_to_canonical_nationality(
+    memory_service: MemoryService,
+) -> None:
+    answer_generator = FakeAnswerGenerator()
+    orchestrator = _orchestrator(memory_service, answer_generator=answer_generator)
+
+    orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="conflict-user",
+            question="Can I work in Zurich?",
+            profile_updates={
+                "nationality": "Australia",
+                "eu_efta_citizen": True,
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+            ],
+        )
+    )
+
+    assert answer_generator.user_profile.country_code == "AU"
+    assert answer_generator.user_profile.nationality_category == "third_country"
+    assert answer_generator.user_profile.eu_efta_citizen is False
+
+
+def test_unknown_nationality_wording_requests_clarification(
+    memory_service: MemoryService,
+) -> None:
+    hybrid = FakeHybridRetriever()
+    orchestrator = _orchestrator(memory_service, hybrid=hybrid)
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="unknown-nationality-user",
+            question="I am a Wakandan citizen and want to work in Zurich.",
+            profile_updates={
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["intended_city", "purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert response.state is ProcedureResponseState.CLARIFICATION_REQUIRED
+    assert "nationality" in response.missing_fields
+    assert hybrid.called is False
+
+
+def test_stateless_statement_requests_clarification_not_third_country(
+    memory_service: MemoryService,
+) -> None:
+    hybrid = FakeHybridRetriever()
+    orchestrator = _orchestrator(memory_service, hybrid=hybrid)
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="stateless-user",
+            question="I am stateless and want to work in Zurich.",
+            profile_updates={
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["intended_city", "purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert response.state is ProcedureResponseState.CLARIFICATION_REQUIRED
+    assert "nationality" in response.missing_fields
+    assert hybrid.called is False
+
+
+def test_australian_query_with_only_eu_efta_evidence_fails_closed(
+    memory_service: MemoryService,
+) -> None:
+    answer_generator = FakeAnswerGenerator()
+    orchestrator = _orchestrator(
+        memory_service,
+        answer_generator=answer_generator,
+        hybrid=FakeHybridRetriever(
+            chunks=[
+                _retrieved_chunk(
+                    chunk_id="eu",
+                    source="free_movement_eu_efta.pdf",
+                    region="federal",
+                    text="EU/EFTA citizens benefit from free movement.",
+                )
+            ]
+        ),
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="australia-only-eu-evidence-user",
+            question="I'm an Australian citizen with a job offer in Zurich.",
+            profile_updates={
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["intended_city", "purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert response.state is ProcedureResponseState.INSUFFICIENT_CONTEXT
+    assert response.sources == []
+    assert response.answer is not None
+    assert response.answer.insufficient_context is True
+
+
+def test_dual_nationality_requests_primary_citizenship(
+    memory_service: MemoryService,
+) -> None:
+    hybrid = FakeHybridRetriever()
+    orchestrator = _orchestrator(memory_service, hybrid=hybrid)
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="dual-user",
+            question="I have Australian and Spanish citizenship and want to work in Zurich.",
+            profile_updates={
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+            },
+            confirmed_profile_fields=["intended_city", "purpose_of_stay", "employment_status"],
+        )
+    )
+
+    assert response.state is ProcedureResponseState.CLARIFICATION_REQUIRED
+    assert "nationality" in response.missing_fields
+    assert "Australia" in response.clarification_questions[0].question
+    assert "Spain" in response.clarification_questions[0].question
+    assert hybrid.called is False
 
 
 def test_insufficient_context_does_not_create_plan(
