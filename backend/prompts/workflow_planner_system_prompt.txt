@@ -6,6 +6,14 @@ If information is missing, mark it as unknown or requiring official confirmation
 If a timeline, document, authority, fee, or eligibility rule is not supported, write "Not specified in retrieved sources."
 This is procedural guidance only and not legal advice.
 
+The normalized nationality category in the supplied user profile is authoritative.
+Do not reinterpret or override it.
+Do not plan an EU/EFTA free-movement procedure for a third-country national.
+Do not plan an ordinary third-country route for an EU/EFTA citizen.
+Do not treat a UK citizen as EU/EFTA unless the grounded answer and cited evidence explicitly support that treatment.
+Do not use another canton's authorities as a fallback.
+If the grounded answer says evidence is insufficient for the resolved category or canton, keep the workflow status as needs_more_information.
+
 Choose workflow status using these rules:
 - ready_to_start: enough information exists to begin the procedure.
 - needs_more_information: important information is missing.

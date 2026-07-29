@@ -95,6 +95,7 @@ def chunks_for_pdf(
                 "content_sha256": content_sha256,
                 "synchronized_at": synchronized_at,
                 "source_type": source.source_type,
+                **_source_metadata_for_chunks(source),
             }
         )
         enriched.append(
@@ -182,6 +183,7 @@ def process_webpage(
                 "content_sha256": extracted.content_sha256,
                 "synchronized_at": synchronized_at,
                 "source_type": source.source_type,
+                **_source_metadata_for_chunks(source),
             }
         )
         chunks.append(
@@ -203,3 +205,18 @@ def content_hash_for_local_file(path: Path) -> str:
     """Return a content hash for local seed documents."""
 
     return sha256_bytes(path.read_bytes())
+
+
+def _source_metadata_for_chunks(source: SourceDefinition) -> dict[str, object]:
+    """Return Chroma-compatible selected registry metadata."""
+
+    chunk_metadata: dict[str, object] = {}
+    for key in ("nationality_categories", "immigration_regimes", "applicable_person_categories"):
+        value = source.metadata.get(key)
+        if value is None:
+            continue
+        if isinstance(value, list):
+            chunk_metadata[key] = ",".join(str(item) for item in value)
+        elif isinstance(value, (str, int, float, bool)):
+            chunk_metadata[key] = value
+    return chunk_metadata

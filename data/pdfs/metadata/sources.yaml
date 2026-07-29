@@ -15,6 +15,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_federal_b_permit_sem
     enabled: false
     region: federal
@@ -29,6 +31,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_federal_citizenship_overview
     enabled: false
     region: federal
@@ -43,6 +47,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - all
   - id: seed_federal_family_reunification
     enabled: false
     region: federal
@@ -57,6 +63,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_federal_free_movement_eu_efta
     enabled: false
     region: federal
@@ -73,6 +81,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_federal_residence_permits_overview
     enabled: false
     region: federal
@@ -88,6 +98,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_federal_without_gainful_activity
     enabled: false
     region: federal
@@ -103,6 +115,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - eu_efta
   - id: seed_zh_driving_licence_exchange
     enabled: false
     region: zh
@@ -117,6 +131,8 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - all
   - id: seed_zh_registration_zurich
     enabled: false
     region: zh
@@ -131,3 +147,5 @@ sources:
     notes: "Manually collected seed document. TODO: associate with a verified official HTTPS source before automatic refresh."
     metadata:
       manually_seeded: true
+      nationality_categories:
+        - all

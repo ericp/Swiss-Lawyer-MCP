@@ -266,6 +266,26 @@ Local-only entries:
 
 Bootstrap can download enabled remote sources when they exist. With the current registry, the remote-download count is zero; bootstrap validates the registry, records local-only seed sources, and indexes the existing local seed PDFs.
 
+## Nationality routing
+
+Swiss Lawyer normalizes stated nationalities with the ISO 3166 country dataset provided by `pycountry`, then routes the user into one Swiss immigration category:
+
+- `swiss`
+- `eu_efta`
+- `uk`
+- `third_country`
+- `special_or_unknown`
+
+Country names, alpha-2 codes, alpha-3 codes, common aliases, and common English demonyms are normalized deterministically. Citizenship and residence are treated separately, so "American citizen living in Spain" remains a US/third-country case with Spain only as the residence country.
+
+Explicit current-turn citizenship facts override conflicting saved SQLite memory for the active request. Confirmed nationality updates also store derived fields such as country code and nationality category so memory does not drift into contradictory values.
+
+Dual nationality, ambiguous wording, stateless/refugee/asylum/protected-person status, and unknown nationality inputs are treated as `special_or_unknown` and may require clarification. The system must not silently choose the more favorable citizenship or guess a legal category.
+
+Retrieval is filtered by both canton and nationality category. For example, a Zurich third-country case may use federal sources plus Zurich sources only when they are applicable to `all` or `third_country`; EU/EFTA-only evidence is excluded. If matching official evidence is unavailable, Swiss Lawyer returns insufficient context instead of using a similar but legally inapplicable category.
+
+Correct classification does not guarantee complete legal coverage. Answers remain limited to the official sources currently indexed.
+
 ## Storage Roles
 
 Swiss Lawyer MCP uses two separate storage systems:
