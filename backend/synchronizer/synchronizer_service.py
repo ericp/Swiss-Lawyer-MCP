@@ -298,7 +298,8 @@ class SourceSynchronizer:
                 overlap_words=self._settings.chunk_overlap_words,
             )
             row.document_id = document_id
-            self._replace_chunks(document_id=document_id, chunks=chunks)
+            if _source_enabled_for_retrieval(source):
+                self._replace_chunks(document_id=document_id, chunks=chunks)
             destination = self._local_path_for_source(source)
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(temp_path), destination)
@@ -332,7 +333,8 @@ class SourceSynchronizer:
             event_type=SyncEventType.VALIDATED,
             message="Webpage content normalized.",
         )
-        self._replace_chunks(document_id=document_id, chunks=chunks)
+        if _source_enabled_for_retrieval(source):
+            self._replace_chunks(document_id=document_id, chunks=chunks)
 
     def _replace_chunks(self, *, document_id: str, chunks: list) -> None:
         if not chunks:
@@ -518,3 +520,12 @@ def _report_from_run(run: SynchronizationRunORM, *, events: list[str]) -> Synchr
 def _sanitize_error(error: Exception) -> str:
     message = str(error) or error.__class__.__name__
     return message[:500]
+
+
+def _source_enabled_for_retrieval(source: SourceDefinition) -> bool:
+    value = source.metadata.get("use_for_retrieval", True)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return True

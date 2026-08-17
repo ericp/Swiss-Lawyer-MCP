@@ -29,6 +29,7 @@ from backend.orchestration.models import (
 )
 from backend.planners.workflow_planner import WorkflowPlanner
 from backend.retrieval.hybrid import HybridRetriever
+from backend.synchronizer.source_coverage import SourceCoverageService
 from backend.synchronizer.regions import REGIONS
 
 
@@ -66,6 +67,7 @@ class ProcedureOrchestrator:
         answer_generator: GroundedAnswerGenerator,
         workflow_planner: WorkflowPlanner,
         canton_resolver: CantonResolver,
+        source_coverage_service: SourceCoverageService | None = None,
         default_retrieval_top_k: int = 10,
         default_rerank_top_k: int = 5,
     ) -> None:
@@ -77,6 +79,7 @@ class ProcedureOrchestrator:
         self._answer_generator = answer_generator
         self._workflow_planner = workflow_planner
         self._canton_resolver = canton_resolver
+        self._source_coverage_service = source_coverage_service
         self._default_retrieval_top_k = default_retrieval_top_k
         self._default_rerank_top_k = default_rerank_top_k
 
@@ -165,11 +168,15 @@ class ProcedureOrchestrator:
             intent=detected_intent.intent,
             profile=runtime_profile,
         )
+        requested_region = _normalize_canton_region(runtime_profile.intended_canton)
+        self._refresh_sources_before_retrieval(
+            intent=detected_intent.intent,
+            requested_region=requested_region,
+        )
         retrieval_result = self._hybrid_retriever.retrieve(
             retrieval_query,
             top_k=request.retrieval_top_k or self._default_retrieval_top_k,
         )
-        requested_region = _normalize_canton_region(runtime_profile.intended_canton)
         retrieval_result = _filter_retrieval_result_by_region(
             retrieval_result,
             requested_region=requested_region,
@@ -387,6 +394,23 @@ class ProcedureOrchestrator:
             procedure_id=existing_procedure.id,
             plan=plan,
         )
+
+    def _refresh_sources_before_retrieval(
+        self,
+        *,
+        intent: str,
+        requested_region: str | None,
+    ) -> None:
+        if self._source_coverage_service is None:
+            return
+        result = self._source_coverage_service.refresh_for_case(
+            intent=intent,
+            requested_region=requested_region,
+        )
+        if result.refresh_succeeded:
+            refresh = getattr(self._hybrid_retriever, "refresh", None)
+            if callable(refresh):
+                refresh()
 
 
 def _merge_profile_updates(

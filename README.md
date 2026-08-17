@@ -25,6 +25,8 @@ User asks a question through ChatGPT
 ↓
 Swiss Lawyer detects the procedure and relevant canton
 ↓
+If approved procedure-specific sources exist, Swiss Lawyer refreshes those federal + canton sources before retrieval
+↓
 It searches the local official-source knowledge base
 ↓
 It returns a grounded answer, sources, and procedure steps
@@ -33,6 +35,8 @@ It returns a grounded answer, sources, and procedure steps
 `data/pdfs/metadata/sources.yaml` is the project's approved source list. It tells the synchronizer which official government PDFs and webpages may be downloaded and indexed.
 
 During first-time setup, enabled official remote sources are downloaded to the developer's machine and indexed in ChromaDB. They are not downloaded again for every question. The current demo seed PDFs are local-only entries, so bootstrap indexes them from the repository's local seed files instead of downloading them from remote URLs.
+
+At query time, after clarification is complete, Swiss Lawyer can also run a just-in-time freshness check for enabled procedure-specific sources matching the detected intent and canton. Canton portal entries are discovery anchors only; they are not used as legal/procedural evidence unless a specific approved `pdf` or `webpage` source is configured.
 
 ## Prerequisites
 
@@ -243,14 +247,16 @@ Optional OpenAI provider settings remain in `.env.example` for future experiment
 
 Real status of `data/pdfs/metadata/sources.yaml` right now:
 
-- total registry entries: `9`
-- enabled remote sources: `0`
+- total registry entries: `47`
+- enabled remote sources: `38`
 - enabled remote PDF sources: `0`
-- enabled webpage sources: `0`
-- enabled landing-page sources: `0`
+- enabled webpage sources: `11`
+- enabled landing-page sources: `27`
+- enabled retrieval-ready remote sources: `11`
 - regions with confirmed source coverage: `federal`, `zh`
 - canton-specific coverage currently confirmed: Zurich only
 - local-only entries: `9`
+- official canton portal anchors: all 26 cantons
 
 Local-only entries:
 
@@ -264,7 +270,7 @@ Local-only entries:
 - `seed_zh_driving_licence_exchange`
 - `seed_zh_registration_zurich`
 
-Bootstrap can download enabled remote sources when they exist. With the current registry, the remote-download count is zero; bootstrap validates the registry, records local-only seed sources, and indexes the existing local seed PDFs.
+Bootstrap downloads enabled retrieval-ready federal webpages and can use enabled landing-page entries for discovery. Canton portal anchors are not procedure-specific retrieval evidence. The bootstrap still validates the registry, records local-only seed sources, and indexes the existing local seed PDFs.
 
 ## Nationality routing
 
@@ -869,13 +875,15 @@ Remote `pdf`, `webpage`, and `landing_page` entries must use HTTPS and pass the 
 
 Current registry viability:
 
-- total registry entries: `9`
+- total registry entries: `47`
 - enabled remote PDF entries: `0`
-- enabled webpage entries: `0`
-- enabled landing-page entries: `0`
+- enabled webpage entries: `11`
+- enabled landing-page entries: `27`
+- enabled retrieval-ready remote entries: `11`
 - local-only seed entries: `9`
+- official canton portal anchors: all 26 cantons
 
-That means the current clone contains the demo seed PDFs needed to build the local portfolio knowledge base, while the registry is already structured for future verified official URLs. `./scripts/bootstrap_local.sh` still runs registry validation and synchronization. With the current registry, synchronization records the manually seeded sources and does not download remote documents. When verified HTTPS government URLs are added and enabled, bootstrap will download those sources locally without hard-coding URLs in shell scripts.
+That means the current clone contains the demo seed PDFs needed to build the local portfolio knowledge base, adds retrieval-ready federal official webpages, and includes verified official canton portal anchors for future discovery. The portal anchors are marked as not-for-retrieval so they do not pollute legal/procedural answers. When verified canton procedure-specific HTTPS government URLs are added and enabled, bootstrap or just-in-time refresh can download and index those sources without hard-coding URLs in shell scripts.
 
 ### Approved Domain Policy
 

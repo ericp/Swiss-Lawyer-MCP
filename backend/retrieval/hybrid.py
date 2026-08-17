@@ -33,6 +33,13 @@ class HybridRetriever:
             merged_results=merged_results,
         )
 
+    def refresh(self) -> None:
+        """Refresh retriever indexes after just-in-time source synchronization."""
+
+        refresh = getattr(self._bm25_retriever, "refresh", None)
+        if callable(refresh):
+            refresh()
+
 
 def merge_results(
     vector_results: list[RetrievedChunk],

@@ -119,6 +119,7 @@ def _reranked_chunks(*, duplicate_source: bool = False) -> list[RerankedChunk]:
 class FakeHybridRetriever:
     def __init__(self, chunks: list[RetrievedChunk] | None = None) -> None:
         self.called = False
+        self.refreshed = False
         self.chunks = chunks
 
     def retrieve(self, query: str, *, top_k: int = 10) -> HybridRetrievalResult:
@@ -130,6 +131,25 @@ class FakeHybridRetriever:
             bm25_results=[],
             merged_results=chunks[:top_k],
         )
+
+    def refresh(self) -> None:
+        self.refreshed = True
+
+
+class FakeSourceCoverageService:
+    def __init__(self, *, succeeds: bool = True) -> None:
+        self.called = False
+        self.calls: list[dict[str, str | None]] = []
+        self.succeeds = succeeds
+
+    def refresh_for_case(self, *, intent: str, requested_region: str | None) -> Any:
+        self.called = True
+        self.calls.append({"intent": intent, "requested_region": requested_region})
+
+        class Result:
+            refresh_succeeded = self.succeeds
+
+        return Result()
 
 
 class FakeReranker:
@@ -205,6 +225,7 @@ def _orchestrator(
     reranker: FakeReranker | None = None,
     answer_generator: FakeAnswerGenerator | None = None,
     planner: FakeWorkflowPlanner | None = None,
+    source_coverage: FakeSourceCoverageService | None = None,
 ) -> ProcedureOrchestrator:
     return ProcedureOrchestrator(
         memory_service=memory_service,
@@ -215,6 +236,7 @@ def _orchestrator(
         answer_generator=answer_generator or FakeAnswerGenerator(),
         workflow_planner=planner or FakeWorkflowPlanner(),
         canton_resolver=CantonResolver(),
+        source_coverage_service=source_coverage,
     )
 
 
@@ -235,7 +257,12 @@ def test_clarification_required_stops_before_retrieval(
     memory_service: MemoryService,
 ) -> None:
     hybrid = FakeHybridRetriever()
-    orchestrator = _orchestrator(memory_service, hybrid=hybrid)
+    source_coverage = FakeSourceCoverageService()
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=hybrid,
+        source_coverage=source_coverage,
+    )
 
     response = orchestrator.handle_query(
         ProcedureQueryRequest(
@@ -250,6 +277,84 @@ def test_clarification_required_stops_before_retrieval(
     assert response.needs_clarification is True
     assert "purpose_of_stay" in response.missing_fields
     assert hybrid.called is False
+    assert source_coverage.called is False
+
+
+def test_relevant_sources_are_refreshed_after_clarification_before_retrieval(
+    memory_service: MemoryService,
+) -> None:
+    hybrid = FakeHybridRetriever()
+    source_coverage = FakeSourceCoverageService()
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=hybrid,
+        source_coverage=source_coverage,
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="jit-source-user",
+            question="Do I need a work permit in Bern?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Bern",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+                "profession": "software engineer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+                "profession",
+            ],
+        )
+    )
+
+    assert response.needs_clarification is False
+    assert source_coverage.called is True
+    assert source_coverage.calls == [{"intent": "work_permit", "requested_region": "be"}]
+    assert hybrid.refreshed is True
+    assert hybrid.called is True
+
+
+def test_failed_source_refresh_does_not_refresh_hybrid_index(
+    memory_service: MemoryService,
+) -> None:
+    hybrid = FakeHybridRetriever()
+    source_coverage = FakeSourceCoverageService(succeeds=False)
+    orchestrator = _orchestrator(
+        memory_service,
+        hybrid=hybrid,
+        source_coverage=source_coverage,
+    )
+
+    response = orchestrator.handle_query(
+        ProcedureQueryRequest(
+            external_user_key="jit-source-failure-user",
+            question="Do I need a work permit in Zurich?",
+            profile_updates={
+                "nationality": "Australia",
+                "intended_city": "Zurich",
+                "purpose_of_stay": "employment",
+                "employment_status": "has Swiss job offer",
+                "profession": "software engineer",
+            },
+            confirmed_profile_fields=[
+                "nationality",
+                "intended_city",
+                "purpose_of_stay",
+                "employment_status",
+                "profession",
+            ],
+        )
+    )
+
+    assert response.needs_clarification is False
+    assert source_coverage.called is True
+    assert hybrid.refreshed is False
+    assert hybrid.called is True
 
 
 def test_confirmed_profile_updates_persist_and_unconfirmed_updates_do_not(

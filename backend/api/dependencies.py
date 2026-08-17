@@ -29,6 +29,7 @@ from backend.retrieval.bm25 import BM25Retriever
 from backend.retrieval.hybrid import HybridRetriever
 from backend.retrieval.vector import VectorRetriever
 from backend.synchronizer.http_client import SyncHttpClient
+from backend.synchronizer.source_coverage import SourceCoverageService
 from backend.synchronizer.synchronizer_service import SourceSynchronizer
 from backend.utils.config import (
     APISettings,
@@ -183,6 +184,12 @@ def get_source_synchronizer() -> SourceSynchronizer:
     )
 
 
+def get_source_coverage_service() -> SourceCoverageService:
+    """Return the just-in-time source coverage service."""
+
+    return SourceCoverageService(synchronizer=get_source_synchronizer())
+
+
 def get_orchestrator() -> ProcedureOrchestrator:
     retrieval_settings = get_retrieval_settings()
     return ProcedureOrchestrator(
@@ -194,6 +201,7 @@ def get_orchestrator() -> ProcedureOrchestrator:
         answer_generator=get_answer_generator(),
         workflow_planner=get_workflow_planner(),
         canton_resolver=get_canton_resolver(),
+        source_coverage_service=get_source_coverage_service(),
         default_retrieval_top_k=retrieval_settings.top_k,
         default_rerank_top_k=retrieval_settings.rerank_top_k,
     )
