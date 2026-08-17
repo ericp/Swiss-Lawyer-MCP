@@ -149,3 +149,616 @@ sources:
       manually_seeded: true
       nationality_categories:
         - all
+  - id: federal_ch_residence_permits
+    enabled: true
+    region: federal
+    authority: Swiss Confederation, cantons and communes
+    procedure_types:
+      - immigration
+      - residence_permit
+      - municipality_registration
+    source_type: webpage
+    url: https://www.ch.ch/en/foreign-nationals-in-switzerland/entry-and-stay-in-switzerland/permits-for-living-in-switzerland/
+    language: en
+    local_filename: federal_ch_residence_permits.html
+    discovery_enabled: false
+    title: Permits for living in Switzerland
+    notes: "Official ch.ch page covering Swiss residence permits and renewal; points users to cantonal migration/employment authorities for applications."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_ch_working_as_foreign_national
+    enabled: true
+    region: federal
+    authority: Swiss Confederation, cantons and communes
+    procedure_types:
+      - immigration
+      - residence_permit
+      - work_permit
+      - municipality_registration
+    source_type: webpage
+    url: https://www.ch.ch/en/work/working-in-switzerland-as-a-foreign-national/
+    language: en
+    local_filename: federal_ch_working_as_foreign_national.html
+    discovery_enabled: false
+    title: Working in Switzerland as a foreign national
+    notes: "Official ch.ch page covering EU/EFTA, UK and non-EU/EFTA work/residence basics, registration timing and cantonal authority routing."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_ch_family_reunification
+    enabled: true
+    region: federal
+    authority: Swiss Confederation, cantons and communes
+    procedure_types:
+      - family_reunification
+      - residence_permit
+    source_type: webpage
+    url: https://www.ch.ch/en/foreign-nationals-in-switzerland/entry-and-stay-in-switzerland/family-reunification/
+    language: en
+    local_filename: federal_ch_family_reunification.html
+    discovery_enabled: false
+    title: Family reunification
+    notes: "Official ch.ch page covering family reunification eligibility, documents, time limits and cantonal application routing."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_sem_eu_efta_living_working
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - immigration
+      - residence_permit
+      - work_permit
+      - family_reunification
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/themen/fza_schweiz-eu-efta/eu-efta_buerger_schweiz.html
+    language: en
+    local_filename: federal_sem_eu_efta_living_working.html
+    discovery_enabled: false
+    title: "EU/EFTA Citizens: Living and Working in Switzerland"
+    notes: "Official SEM page for EU/EFTA citizens living, working, studying or joining family in Switzerland."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - eu_efta
+  - id: federal_sem_non_eu_work_procedure
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - work_permit
+      - residence_permit
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/themen/arbeit/nicht-eu_efta-angehoerige/verfahrensablauf.html
+    language: en
+    local_filename: federal_sem_non_eu_work_procedure.html
+    discovery_enabled: false
+    title: Procedure for non-EU/EFTA work permits
+    notes: "Official SEM procedure page for non-EU/EFTA work permit applications and federal/cantonal decision flow."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - third_country
+        - uk
+  - id: federal_sem_non_eu_work_documents
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - work_permit
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/themen/arbeit/nicht-eu_efta-angehoerige/verfahrensablauf/gesuchsunterlagen.html
+    language: en
+    local_filename: federal_sem_non_eu_work_documents.html
+    discovery_enabled: false
+    title: Application documents for non-EU/EFTA work permits
+    notes: "Official SEM page listing application-document categories for non-EU/EFTA gainful employment."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - third_country
+        - uk
+  - id: federal_sem_non_eu_residence_permits
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - residence_permit
+      - immigration
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/themen/aufenthalt/nicht_eu_efta.html
+    language: en
+    local_filename: federal_sem_non_eu_residence_permits.html
+    discovery_enabled: false
+    title: Residence permits for non-EU/EFTA nationals
+    notes: "Official SEM page covering residence permits for third-country nationals."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - third_country
+        - uk
+  - id: federal_sem_entry_visa_requirements
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - immigration
+      - residence_permit
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/themen/einreise/info-einreise/voraussetzungen-nach-staat/mit-visum.html
+    language: en
+    local_filename: federal_sem_entry_visa_requirements.html
+    discovery_enabled: false
+    title: Entry with visa
+    notes: "Official SEM page for third-country nationals requiring a visa to enter Switzerland."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - third_country
+        - uk
+  - id: federal_sem_becoming_swiss_citizen
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - citizenship
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/overview-einbuergerung.html
+    language: en
+    local_filename: federal_sem_becoming_swiss_citizen.html
+    discovery_enabled: false
+    title: Becoming a Swiss citizen
+    notes: "Official SEM overview for ordinary and simplified naturalisation; cantons and communes remain responsible for ordinary procedure details."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_sem_cantonal_authorities
+    enabled: true
+    region: federal
+    authority: State Secretariat for Migration
+    procedure_types:
+      - immigration
+      - residence_permit
+      - work_permit
+      - family_reunification
+      - citizenship
+    source_type: webpage
+    url: https://www.sem.admin.ch/sem/en/home/sem/kontakt/kantonale_behoerden.html
+    language: en
+    local_filename: federal_sem_cantonal_authorities.html
+    discovery_enabled: false
+    title: Cantonal authorities
+    notes: "Official SEM page for cantonal migration, labour-market and naturalisation authorities."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_astra_foreign_driving_licence_exchange
+    enabled: true
+    region: federal
+    authority: Federal Roads Office FEDRO
+    procedure_types:
+      - driving_licence_exchange
+    source_type: webpage
+    url: https://blog.astra.admin.ch/umtausch-auslandischer-fuhrerausweise/
+    language: de
+    local_filename: federal_astra_foreign_driving_licence_exchange.html
+    discovery_enabled: false
+    title: Umtausch ausländischer Führerausweise unter der Lupe
+    notes: "Official FEDRO/ASTRA explanatory article on exchanging foreign driving licences; canton road traffic offices remain competent for applications."
+    metadata:
+      use_for_retrieval: true
+      nationality_categories:
+        - all
+  - id: federal_ch_cantonal_authority_directory
+    enabled: true
+    region: federal
+    authority: Swiss Confederation, cantons and communes
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ch.ch/en/safety-and-justice/addresses-of-administrative-authorities/
+    language: en
+    local_filename: cantonal_authority_directory.html
+    discovery_enabled: false
+    title: Swiss public administration addresses and online access
+    notes: "Official ch.ch authority directory used to verify canton portals. Not used directly as procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: authority_directory
+  - id: canton_portal_ag
+    enabled: true
+    region: ag
+    authority: Canton of Aargau
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ag.ch
+    language: de
+    local_filename: canton_portal_ag.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ai
+    enabled: true
+    region: ai
+    authority: Canton of Appenzell Innerrhoden
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ai.ch
+    language: de
+    local_filename: canton_portal_ai.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ar
+    enabled: true
+    region: ar
+    authority: Canton of Appenzell Ausserrhoden
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ar.ch
+    language: de
+    local_filename: canton_portal_ar.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_be
+    enabled: true
+    region: be
+    authority: Canton of Bern
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.sta.be.ch
+    language: de
+    local_filename: canton_portal_be.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_bl
+    enabled: true
+    region: bl
+    authority: Canton of Basel-Landschaft
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.baselland.ch
+    language: de
+    local_filename: canton_portal_bl.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_bs
+    enabled: true
+    region: bs
+    authority: Canton of Basel-Stadt
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.bs.ch
+    language: de
+    local_filename: canton_portal_bs.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_fr
+    enabled: true
+    region: fr
+    authority: Canton of Fribourg
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.fr.ch
+    language: fr
+    local_filename: canton_portal_fr.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ge
+    enabled: true
+    region: ge
+    authority: Canton of Geneva
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://ge.ch
+    language: fr
+    local_filename: canton_portal_ge.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_gl
+    enabled: true
+    region: gl
+    authority: Canton of Glarus
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.gl.ch
+    language: de
+    local_filename: canton_portal_gl.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_gr
+    enabled: true
+    region: gr
+    authority: Canton of Graubünden
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.gr.ch
+    language: de
+    local_filename: canton_portal_gr.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ju
+    enabled: true
+    region: ju
+    authority: Canton of Jura
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.jura.ch
+    language: fr
+    local_filename: canton_portal_ju.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_lu
+    enabled: true
+    region: lu
+    authority: Canton of Lucerne
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.lu.ch
+    language: de
+    local_filename: canton_portal_lu.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ne
+    enabled: true
+    region: ne
+    authority: Canton of Neuchâtel
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ne.ch
+    language: fr
+    local_filename: canton_portal_ne.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_nw
+    enabled: true
+    region: nw
+    authority: Canton of Nidwalden
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.nw.ch
+    language: de
+    local_filename: canton_portal_nw.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ow
+    enabled: true
+    region: ow
+    authority: Canton of Obwalden
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ow.ch
+    language: de
+    local_filename: canton_portal_ow.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_sg
+    enabled: true
+    region: sg
+    authority: Canton of St. Gallen
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.sg.ch
+    language: de
+    local_filename: canton_portal_sg.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_sh
+    enabled: true
+    region: sh
+    authority: Canton of Schaffhausen
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.sh.ch
+    language: de
+    local_filename: canton_portal_sh.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_so
+    enabled: true
+    region: so
+    authority: Canton of Solothurn
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.so.ch
+    language: de
+    local_filename: canton_portal_so.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_sz
+    enabled: true
+    region: sz
+    authority: Canton of Schwyz
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.sz.ch
+    language: de
+    local_filename: canton_portal_sz.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_tg
+    enabled: true
+    region: tg
+    authority: Canton of Thurgau
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.tg.ch
+    language: de
+    local_filename: canton_portal_tg.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ti
+    enabled: true
+    region: ti
+    authority: Canton of Ticino
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www4.ti.ch
+    language: it
+    local_filename: canton_portal_ti.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_ur
+    enabled: true
+    region: ur
+    authority: Canton of Uri
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.ur.ch
+    language: de
+    local_filename: canton_portal_ur.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_vd
+    enabled: true
+    region: vd
+    authority: Canton of Vaud
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.vd.ch
+    language: fr
+    local_filename: canton_portal_vd.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_vs
+    enabled: true
+    region: vs
+    authority: Canton of Valais
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.vs.ch
+    language: de
+    local_filename: canton_portal_vs.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_zg
+    enabled: true
+    region: zg
+    authority: Canton of Zug
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://zg.ch
+    language: de
+    local_filename: canton_portal_zg.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal
+  - id: canton_portal_zh
+    enabled: true
+    region: zh
+    authority: Canton of Zurich
+    procedure_types:
+      - canton_authority_directory
+    source_type: landing_page
+    url: https://www.zh.ch
+    language: de
+    local_filename: canton_portal_zh.html
+    discovery_enabled: true
+    notes: "Official canton portal from ch.ch cantonal authority directory. Discovery anchor only, not direct procedure evidence."
+    metadata:
+      use_for_retrieval: false
+      coverage_role: canton_portal

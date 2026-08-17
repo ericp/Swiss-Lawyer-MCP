@@ -17,12 +17,12 @@ class RegionDefinition:
 
 
 REGIONS: dict[str, RegionDefinition] = {
-    "federal": RegionDefinition("federal", "Swiss Confederation", "federal", ("admin.ch",)),
+    "federal": RegionDefinition("federal", "Swiss Confederation", "federal", ("admin.ch", "ch.ch")),
     "ag": RegionDefinition("ag", "Aargau", "canton", ("ag.ch",)),
     "ai": RegionDefinition("ai", "Appenzell Innerrhoden", "canton", ("ai.ch",)),
     "ar": RegionDefinition("ar", "Appenzell Ausserrhoden", "canton", ("ar.ch",)),
     "be": RegionDefinition("be", "Bern", "canton", ("be.ch",)),
-    "bl": RegionDefinition("bl", "Basel-Landschaft", "canton", ("bl.ch",)),
+    "bl": RegionDefinition("bl", "Basel-Landschaft", "canton", ("bl.ch", "baselland.ch")),
     "bs": RegionDefinition("bs", "Basel-Stadt", "canton", ("bs.ch",)),
     "fr": RegionDefinition("fr", "Fribourg", "canton", ("fr.ch",)),
     "ge": RegionDefinition("ge", "Geneva", "canton", ("ge.ch",)),

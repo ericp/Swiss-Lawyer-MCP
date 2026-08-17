@@ -39,9 +39,9 @@ class BM25Retriever:
             client = chromadb.PersistentClient(path=str(path))
             self._collection = client.get_or_create_collection(name=collection_name)
 
-        self._chunks = self._load_chunks()
-        tokenized_corpus = [tokenize(chunk.text) for chunk in self._chunks]
-        self._bm25 = BM25Okapi(tokenized_corpus) if tokenized_corpus else None
+        self._chunks: list[_IndexedChunk] = []
+        self._bm25: BM25Okapi | None = None
+        self.refresh()
 
     def retrieve(self, query: str, *, top_k: int = 10) -> list[RetrievedChunk]:
         """Return the top BM25 keyword matches for a user query."""
@@ -67,6 +67,13 @@ class BM25Retriever:
             )
             for index in ranked_indexes
         ]
+
+    def refresh(self) -> None:
+        """Reload chunks from ChromaDB after synchronization or reindexing."""
+
+        self._chunks = self._load_chunks()
+        tokenized_corpus = [tokenize(chunk.text) for chunk in self._chunks]
+        self._bm25 = BM25Okapi(tokenized_corpus) if tokenized_corpus else None
 
     def _load_chunks(self) -> list[_IndexedChunk]:
         results = self._collection.get(include=["documents", "metadatas"])
